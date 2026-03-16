@@ -14,5 +14,11 @@
 .DS_Store
 Thumbs.db
 
+# Docs (local analysis, not tracked)
+docs/
+
+# Local cargo config (machine-specific)
+.cargo/
+
 # Config (contains API keys)
 .piz/
