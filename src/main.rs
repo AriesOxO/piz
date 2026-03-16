@@ -101,9 +101,15 @@ async fn run() -> Result<()> {
     // Create backend early (needed for both cache hits and LLM calls, for auto-fix)
     let backend = llm::create_backend(&cfg, cli.backend.as_deref())?;
 
+    // Open cache once and reuse
+    let cache = if !cli.no_cache {
+        Some(cache::Cache::open(cfg.cache_ttl_hours)?)
+    } else {
+        None
+    };
+
     // Check cache
-    if !cli.no_cache {
-        let c = cache::Cache::open(cfg.cache_ttl_hours)?;
+    if let Some(ref c) = cache {
         if let Some((cached_cmd, cached_danger)) = c.get(&query, &ctx.os, &ctx.shell)? {
             ui::print_cached(tr);
             let regex_danger = danger::detect_danger_regex(&cached_cmd);
@@ -157,8 +163,7 @@ async fn run() -> Result<()> {
     let final_danger = regex_danger.max(llm_danger);
 
     // Cache the result
-    if !cli.no_cache {
-        let c = cache::Cache::open(cfg.cache_ttl_hours)?;
+    if let Some(ref c) = cache {
         let _ = c.put(&query, &ctx.os, &ctx.shell, &command, final_danger.as_str());
     }
 
