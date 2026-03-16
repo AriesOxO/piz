@@ -16,6 +16,8 @@ pub struct Config {
     pub language: String,
     #[serde(default = "default_chat_history_size")]
     pub chat_history_size: usize,
+    #[serde(default = "default_cache_max_entries")]
+    pub cache_max_entries: usize,
     pub openai: Option<OpenAiConfig>,
     pub claude: Option<ClaudeConfig>,
     pub gemini: Option<GeminiConfig>,
@@ -71,6 +73,9 @@ fn default_claude_model() -> String {
 }
 fn default_chat_history_size() -> usize {
     20
+}
+fn default_cache_max_entries() -> usize {
+    1000
 }
 fn default_gemini_model() -> String {
     "gemini-2.5-flash".into()

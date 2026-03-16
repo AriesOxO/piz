@@ -103,7 +103,10 @@ async fn run() -> Result<()> {
 
     // Open cache once and reuse
     let cache = if !cli.no_cache {
-        Some(cache::Cache::open(cfg.cache_ttl_hours)?)
+        Some(cache::Cache::open_with_max(
+            cfg.cache_ttl_hours,
+            cfg.cache_max_entries,
+        )?)
     } else {
         None
     };

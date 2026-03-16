@@ -7,17 +7,22 @@ use crate::config;
 pub struct Cache {
     conn: Connection,
     ttl_hours: u64,
+    max_entries: usize,
 }
 
 impl Cache {
     pub fn open(ttl_hours: u64) -> Result<Self> {
+        Self::open_with_max(ttl_hours, 1000)
+    }
+
+    pub fn open_with_max(ttl_hours: u64, max_entries: usize) -> Result<Self> {
         let dir = config::piz_dir()?;
         std::fs::create_dir_all(&dir)?;
         let db_path = dir.join("cache.db");
-        Self::open_at(&db_path, ttl_hours)
+        Self::open_at(&db_path, ttl_hours, max_entries)
     }
 
-    pub fn open_at(db_path: &std::path::Path, ttl_hours: u64) -> Result<Self> {
+    pub fn open_at(db_path: &std::path::Path, ttl_hours: u64, max_entries: usize) -> Result<Self> {
         let conn = Connection::open(db_path)
             .with_context(|| format!("Failed to open cache db: {}", db_path.display()))?;
 
@@ -30,12 +35,23 @@ impl Cache {
             )",
         )?;
 
-        Ok(Self { conn, ttl_hours })
+        let cache = Self {
+            conn,
+            ttl_hours,
+            max_entries,
+        };
+        cache.evict_expired()?;
+        Ok(cache)
     }
 
     /// Open an in-memory cache (for testing)
     #[cfg(test)]
     pub fn open_in_memory(ttl_hours: u64) -> Result<Self> {
+        Self::open_in_memory_with_max(ttl_hours, 1000)
+    }
+
+    #[cfg(test)]
+    pub fn open_in_memory_with_max(ttl_hours: u64, max_entries: usize) -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS cache (
@@ -45,7 +61,11 @@ impl Cache {
                 created_at INTEGER NOT NULL
             )",
         )?;
-        Ok(Self { conn, ttl_hours })
+        Ok(Self {
+            conn,
+            ttl_hours,
+            max_entries,
+        })
     }
 
     pub fn get(&self, query: &str, os: &str, shell: &str) -> Result<Option<(String, String)>> {
@@ -82,6 +102,34 @@ impl Cache {
         self.conn.execute(
             "INSERT OR REPLACE INTO cache (key, command, danger, created_at) VALUES (?1, ?2, ?3, ?4)",
             rusqlite::params![key, command, danger, now_secs()],
+        )?;
+        if self.count()? > self.max_entries {
+            self.evict_lru()?;
+        }
+        Ok(())
+    }
+
+    pub fn count(&self) -> Result<usize> {
+        let count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM cache", [], |row| row.get(0))?;
+        Ok(count as usize)
+    }
+
+    fn evict_expired(&self) -> Result<()> {
+        let now = now_secs();
+        let ttl_secs = self.ttl_hours.saturating_mul(3600);
+        self.conn.execute(
+            "DELETE FROM cache WHERE (created_at + ?1) <= ?2",
+            rusqlite::params![ttl_secs, now],
+        )?;
+        Ok(())
+    }
+
+    fn evict_lru(&self) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM cache WHERE key NOT IN (SELECT key FROM cache ORDER BY created_at DESC LIMIT ?1)",
+            rusqlite::params![self.max_entries],
         )?;
         Ok(())
     }
@@ -206,6 +254,69 @@ mod tests {
         // With TTL 0, created_at + 0 is not > now, so it should miss
         let result = cache.get("q", "Linux", "bash").unwrap();
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn count_returns_correct() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        assert_eq!(cache.count().unwrap(), 0);
+        cache.put("q1", "Linux", "bash", "cmd1", "safe").unwrap();
+        assert_eq!(cache.count().unwrap(), 1);
+        cache.put("q2", "Linux", "bash", "cmd2", "safe").unwrap();
+        assert_eq!(cache.count().unwrap(), 2);
+    }
+
+    #[test]
+    fn evict_lru_keeps_newest() {
+        let cache = Cache::open_in_memory_with_max(168, 2).unwrap();
+        let now = now_secs();
+        // Insert with explicit timestamps to ensure ordering
+        let k1 = Cache::make_key("q1", "Linux", "bash");
+        let k2 = Cache::make_key("q2", "Linux", "bash");
+        let k3 = Cache::make_key("q3", "Linux", "bash");
+        cache
+            .conn
+            .execute(
+                "INSERT INTO cache (key, command, danger, created_at) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![k1, "cmd1", "safe", now - 20],
+            )
+            .unwrap();
+        cache
+            .conn
+            .execute(
+                "INSERT INTO cache (key, command, danger, created_at) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![k2, "cmd2", "safe", now - 10],
+            )
+            .unwrap();
+        cache
+            .conn
+            .execute(
+                "INSERT INTO cache (key, command, danger, created_at) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![k3, "cmd3", "safe", now],
+            )
+            .unwrap();
+        assert_eq!(cache.count().unwrap(), 3);
+        cache.evict_lru().unwrap();
+        assert_eq!(cache.count().unwrap(), 2);
+        // q1 (oldest) should be evicted, q2 and q3 should remain
+        assert!(cache.get("q2", "Linux", "bash").unwrap().is_some());
+        assert!(cache.get("q3", "Linux", "bash").unwrap().is_some());
+    }
+
+    #[test]
+    fn evict_expired_removes_old() {
+        // TTL = 0 means everything expired
+        let cache = Cache::open_in_memory_with_max(0, 1000).unwrap();
+        cache
+            .conn
+            .execute(
+                "INSERT INTO cache (key, command, danger, created_at) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params!["old_key", "old_cmd", "safe", 0u64],
+            )
+            .unwrap();
+        assert_eq!(cache.count().unwrap(), 1);
+        cache.evict_expired().unwrap();
+        assert_eq!(cache.count().unwrap(), 0);
     }
 
     #[test]

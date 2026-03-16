@@ -113,6 +113,7 @@ mod tests {
             auto_confirm_safe: false,
             language: "zh".into(),
             chat_history_size: 20,
+            cache_max_entries: 1000,
             openai: Some(OpenAiConfig {
                 api_key: "sk-test".into(),
                 model: "gpt-4o-mini".into(),
@@ -159,6 +160,7 @@ mod tests {
             auto_confirm_safe: false,
             language: "zh".into(),
             chat_history_size: 20,
+            cache_max_entries: 1000,
             openai: None,
             claude: None,
             gemini: None,
