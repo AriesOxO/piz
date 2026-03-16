@@ -13,6 +13,7 @@ jobs:
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
@@ -22,7 +23,7 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
-            cross: true
+            use-cross: true
           - target: x86_64-apple-darwin
             os: macos-latest
             archive: tar.gz
@@ -41,17 +42,18 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
 
-      # Cross-compilation dependencies for Linux ARM64
-      - name: Install cross-compilation tools
-        if: matrix.cross
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+      # ── Install cross for ARM64 Linux ──
+      - name: Install cross
+        if: matrix.use-cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Build
+      # ── Build ──
+      - name: Build (cross)
+        if: matrix.use-cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build (cargo)
+        if: ${{ !matrix.use-cross }}
         run: cargo build --release --target ${{ matrix.target }}
 
       # ── Package: tar.gz (Unix) ──
@@ -73,7 +75,7 @@ jobs:
       - name: Install cargo-wix
         if: matrix.msi
         run: cargo install cargo-wix --version 0.3.9
-      - name: Init WiX (generate if missing)
+      - name: Init WiX
         if: matrix.msi
         shell: pwsh
         run: |
@@ -100,7 +102,7 @@ jobs:
           cargo deb --target ${{ matrix.target }} --no-build
           cp target/${{ matrix.target }}/debian/*.deb piz-${{ matrix.target }}.deb
 
-      # ── Upload artifacts ──
+      # ── Upload ──
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
