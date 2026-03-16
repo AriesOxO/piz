@@ -32,14 +32,21 @@ $ piz 查看磁盘使用情况
 
 - **自然语言转命令** — 描述需求，得到精确命令
 - **多 LLM 后端** — 支持 OpenAI、Claude、Gemini、Ollama + 12 个 OpenAI 兼容供应商（DeepSeek、硅基流动、OpenRouter、Moonshot、智谱GLM、百度千帆、阿里DashScope、Mistral、Together、Minimax、字节BytePlus 等）
-- **安全加固** — 三层防护：Prompt 层拒绝非命令输入、注入检测（base64 载荷、环境变量泄露、反弹 Shell）、正则危险分级
+- **安全加固** — 三层防护：Prompt 层拒绝非命令输入、注入检测（base64 载荷、环境变量泄露、反弹 Shell、curl 配置攻击）、正则危险分级
 - **危险命令检测** — 正则 + LLM 双重防护，危险命令强制二次确认，无法跳过
 - **命令解释** — `piz -e 'command'` 逐项拆解命令含义
-- **命令纠错** — `piz fix` 自动诊断上次失败命令并给出修复建议
-- **本地缓存** — SQLite 缓存 + TTL 过期，重复查询秒返回
-- **多语言界面** — 中文、英文、日文
-- **跨平台** — Windows (PowerShell/cmd)、macOS、Linux (bash/zsh)
+- **命令纠错** — `piz fix` 自动诊断并修复失败命令，支持自动重试（最多 3 次）
+- **交互式对话** — `piz chat` 多轮对话模式，支持 `/help`、`/clear`、`/history` 命令和历史持久化
+- **多候选命令** — `-n` 参数生成多个命令方案，自主选择最优方案
+- **本地缓存** — SQLite 缓存 + TTL 过期 + LRU 淘汰 + 最大条目数限制，重复查询秒返回
+- **执行历史** — `piz history` 查看和搜索所有执行过的命令
+- **Shell 补全** — 支持 bash、zsh、fish、PowerShell 自动补全
+- **管道模式** — `--pipe` 纯命令输出，便于脚本集成
+- **多语言界面** — 中文、英文、日文，安全提示信息全面国际化
+- **跨平台** — Windows (PowerShell/cmd)、macOS、Linux (bash/zsh/fish)
 - **交互式配置** — 首次运行自动引导，内置供应商预设，无需手动编辑配置
+- **NO_COLOR 支持** — 尊重 `NO_COLOR` 环境变量
+- **API 容错** — 429/5xx 错误自动重试 + 指数退避
 
 ## 快速开始
 
@@ -116,6 +123,16 @@ piz 查看3000端口被谁占用          # → lsof -i :3000
 piz 统计当前目录代码行数          # → find . -name "*.rs" | xargs wc -l
 ```
 
+### 多候选模式
+
+```bash
+$ piz -n 3 查找大文件
+? 选择要执行的命令:
+> 1. find . -size +100M -type f — 查找大于 100MB 的文件
+  2. du -ah . | sort -rh | head -20 — 显示最大的 20 个文件/目录
+  3. ls -lhRS | head -30 — 按大小降序列出文件
+```
+
 ### 命令解释
 
 ```bash
@@ -138,7 +155,62 @@ $ npm install
 
 $ piz fix
 🔧 诊断：权限不足，无法写入 node_modules
-  ➜ sudo npm install
+  - npm install
+  + sudo npm install
+```
+
+修复命令支持自动重试：如果修复后的命令仍然失败，piz 会继续分析错误并尝试修复，最多 3 轮。
+
+### 交互式对话模式
+
+```bash
+$ piz chat
+💬 交互模式
+输入你的请求，或 'exit'/'quit' 退出。
+
+> 列出所有运行中的 docker 容器
+  ➜ docker ps
+  [Y] 执行  [n] 取消  [e] 编辑
+
+> 只显示名称
+  ➜ docker ps --format '{{.Names}}'
+```
+
+对话模式支持特殊命令：
+- `/help` — 显示可用命令
+- `/clear` — 清除对话历史
+- `/history` — 查看对话历史
+
+### 执行历史
+
+```bash
+$ piz history                # 查看最近 20 条执行记录
+$ piz history docker -l 10   # 搜索含 "docker" 的最近 10 条记录
+```
+
+### Shell 补全
+
+```bash
+piz completions bash > ~/.bash_completion.d/piz   # Bash
+piz completions zsh > ~/.zfunc/_piz                # Zsh
+piz completions fish > ~/.config/fish/completions/piz.fish  # Fish
+piz completions powershell > piz.ps1               # PowerShell
+```
+
+### 管道模式
+
+```bash
+# 仅输出命令，无 UI —— 适合脚本集成
+piz --pipe 查看所有 rust 文件   # → find . -name "*.rs"
+eval $(echo "列出文件" | piz --pipe)  # 直接执行
+```
+
+### 配置管理
+
+```bash
+piz config --init        # 运行配置向导
+piz config --show        # 查看当前配置（API 密钥自动脱敏）
+piz config --reset       # 删除配置文件，重新开始
 ```
 
 ### 其他用法
@@ -147,8 +219,9 @@ $ piz fix
 piz --backend ollama 查看内存     # 临时切换后端
 piz --backend gemini 查看CPU      # 使用 Google Gemini
 piz --no-cache 查看系统信息       # 跳过缓存
+piz --verbose 列出文件            # 调试：显示 Prompt 和 LLM 响应
+piz -n 3 列出文件                 # 生成 3 个候选命令
 piz clear-cache                   # 清空缓存
-piz config --init                 # 重新配置
 piz --version                     # 查看版本
 ```
 
@@ -192,8 +265,10 @@ piz --version                     # 查看版本
 ```toml
 default_backend = "openai"
 cache_ttl_hours = 168          # 缓存有效期（7天）
+cache_max_entries = 1000       # 最大缓存条目数（LRU 淘汰）
 auto_confirm_safe = true       # 安全命令自动执行
 language = "zh"                # 界面语言：zh / en / ja
+chat_history_size = 20         # 对话历史最大消息数
 
 [openai]
 api_key = "sk-your-key"
@@ -294,8 +369,13 @@ piz 实现了三层安全防护：
 - 反弹 Shell（`python -e 'import socket...'`）
 - Shell 配置覆写（`> ~/.bashrc`）
 - 静默 Crontab 注入（`| crontab -`）
+- curl 配置文件攻击（`curl -K malicious.conf`）
+- 下载-执行链（`wget ... && chmod +x && ./`）
+- 危险的 find/xargs 模式（`find -delete`、`xargs rm`）
 
-命中以上模式的命令会被**直接拦截**，无法执行。
+命中以上模式的命令会被**直接拦截**，无法执行。注入提示信息已全面国际化（中/英/日）。
+
+缓存命中时也会重新验证注入检测 —— 中毒的缓存条目会被自动清除。
 
 ### 3. 危险分级
 
@@ -310,25 +390,26 @@ piz 实现了三层安全防护：
 ```
 piz/
 ├── src/
-│   ├── main.rs          # 入口，CLI 分发，响应解析，拒绝检测
-│   ├── cli.rs           # clap 命令行参数定义
+│   ├── main.rs          # 入口，CLI 分发，响应解析，多候选选择
+│   ├── cli.rs           # clap 命令行参数定义（含 clap_complete）
 │   ├── config.rs        # TOML 配置 + 交互式配置向导（12 个供应商预设）
-│   ├── context.rs       # 系统上下文收集（OS、Shell、CWD）
-│   ├── i18n.rs          # 多语言翻译（中/英/日）
+│   ├── context.rs       # 系统上下文收集（OS、Shell、CWD、架构、Git、包管理器）
+│   ├── i18n.rs          # 多语言翻译（中/英/日），含注入检测消息国际化
 │   ├── llm/
-│   │   ├── mod.rs       # LlmBackend trait + 工厂函数
-│   │   ├── prompt.rs    # Prompt 模板（含安全规则和 few-shot 示例）
-│   │   ├── openai.rs    # OpenAI 兼容适配器
-│   │   ├── claude.rs    # Claude 适配器
-│   │   ├── gemini.rs    # Google Gemini 适配器
-│   │   └── ollama.rs    # Ollama 适配器
-│   ├── cache.rs         # SQLite 缓存（SHA256 key + TTL）
-│   ├── danger.rs        # 正则危险检测 + 注入扫描
+│   │   ├── mod.rs       # LlmBackend trait + 工厂函数 + 重试/退避工具
+│   │   ├── prompt.rs    # Prompt 模板（含安全规则、few-shot 示例、多候选支持）
+│   │   ├── openai.rs    # OpenAI 兼容适配器（含重试）
+│   │   ├── claude.rs    # Claude 适配器（含重试）
+│   │   ├── gemini.rs    # Google Gemini 适配器（含重试）
+│   │   └── ollama.rs    # Ollama 适配器（含重试）
+│   ├── cache.rs         # SQLite 缓存（SHA256 key + TTL + LRU 淘汰）+ 执行历史
+│   ├── danger.rs        # 正则危险检测 + 注入扫描（InjectionReason 枚举）
 │   ├── executor.rs      # 用户确认交互 + 命令执行
 │   ├── explain.rs       # 命令解释模式
-│   ├── fix.rs           # 命令纠错模式
+│   ├── fix.rs           # 命令纠错模式 + 自动修复重试循环
+│   ├── chat.rs          # 交互式对话模式（斜杠命令 + 历史持久化）
 │   ├── history.rs       # Shell 历史记录读取
-│   └── ui.rs            # 终端输出格式化
+│   └── ui.rs            # 终端输出格式化（Spinner、Diff、着色）
 ├── tests/
 │   └── integration.rs   # 集成测试
 ├── install.sh           # macOS/Linux 安装脚本
@@ -343,9 +424,15 @@ git clone https://github.com/AriesOxO/piz.git
 cd piz
 
 cargo build --release      # 构建
-cargo test                 # 运行测试（120 个）
+cargo test                 # 运行测试（158 个）
 cargo install --path .     # 安装到 PATH
 ```
+
+## 环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `NO_COLOR` | 设置为任意值可禁用彩色输出 |
 
 ## 参与贡献
 

@@ -30,9 +30,11 @@ Thank you for your interest in contributing to piz! This document provides guide
 ### Build
 
 ```bash
-cargo build          # Debug build
+cargo build            # Debug build
 cargo build --release  # Release build
-cargo test           # Run all tests
+cargo test             # Run all tests (158 tests)
+cargo fmt --all -- --check  # Check formatting
+cargo clippy -- -D warnings # Lint check
 ```
 
 ## How to Contribute
@@ -57,7 +59,7 @@ Open an [issue](https://github.com/AriesOxO/piz/issues/new) describing:
 1. Ensure your code builds without warnings: `cargo build`
 2. All tests pass: `cargo test`
 3. Format your code: `cargo fmt`
-4. Run clippy: `cargo clippy`
+4. Run clippy: `cargo clippy -- -D warnings`
 5. Write tests for new functionality
 6. Keep commits focused — one logical change per commit
 
@@ -79,7 +81,8 @@ Examples:
 ### Areas for Contribution
 
 - **New LLM backends** — Add support for more providers
-- **Danger patterns** — Expand regex detection rules
+- **Danger patterns** — Expand regex detection rules in `danger.rs`
+- **Injection patterns** — Add new `InjectionReason` variants with i18n messages
 - **i18n** — Add new languages or improve translations
 - **Platform support** — Improve Windows/macOS compatibility
 - **Tests** — Increase coverage, especially edge cases
@@ -89,41 +92,55 @@ Examples:
 
 ```
 src/
-├── main.rs          # Entry point, CLI dispatch
-├── cli.rs           # clap argument definitions
-├── config.rs        # Config loading + setup wizard
-├── context.rs       # System context (OS, shell, cwd)
-├── i18n.rs          # UI translations
+├── main.rs          # Entry point, CLI dispatch, response parsing, multi-candidate selection
+├── cli.rs           # clap argument definitions (with clap_complete)
+├── config.rs        # Config loading + setup wizard (12 provider presets)
+├── context.rs       # System context (OS, shell, cwd, arch, git, package manager)
+├── i18n.rs          # UI translations (zh/en/ja) including injection messages
 ├── llm/
-│   ├── mod.rs       # LlmBackend trait
-│   ├── prompt.rs    # Prompt templates
-│   ├── openai.rs    # OpenAI adapter
-│   ├── claude.rs    # Claude adapter
-│   └── ollama.rs    # Ollama adapter
-├── cache.rs         # SQLite cache
-├── danger.rs        # Danger detection
-├── executor.rs      # Command execution
+│   ├── mod.rs       # LlmBackend trait + factory + retry/backoff
+│   ├── prompt.rs    # Prompt templates (translate, fix, explain, chat, multi-candidate)
+│   ├── openai.rs    # OpenAI adapter (with retry)
+│   ├── claude.rs    # Claude adapter (with retry)
+│   ├── gemini.rs    # Gemini adapter (with retry)
+│   └── ollama.rs    # Ollama adapter (with retry)
+├── cache.rs         # SQLite cache (TTL + LRU eviction) + execution history
+├── danger.rs        # Danger detection + injection scanner (InjectionReason enum)
+├── executor.rs      # Command execution + user confirmation
 ├── explain.rs       # Explain mode
-├── fix.rs           # Fix mode
-├── history.rs       # Shell history
-└── ui.rs            # Terminal output
+├── fix.rs           # Fix mode + auto-fix retry loop
+├── chat.rs          # Interactive chat mode (slash commands + persistent history)
+├── history.rs       # Shell history reader
+└── ui.rs            # Terminal output (spinner, diff, colors)
 ```
 
 ### Adding a New LLM Backend
 
 1. Create `src/llm/your_backend.rs`
-2. Implement the `LlmBackend` trait
-3. Add config struct in `config.rs`
-4. Register in factory function `create_backend()` in `src/llm/mod.rs`
-5. Add setup flow in `config.rs` init wizard
-6. Write tests
+2. Implement the `LlmBackend` trait (`chat()` and `chat_with_history()`)
+3. Add retry loop using `super::should_retry()`, `super::backoff_delay()`, `super::MAX_RETRIES`
+4. Use `super::DEFAULT_TEMPERATURE` and `super::DEFAULT_MAX_TOKENS`
+5. Add config struct in `config.rs`
+6. Register in factory function `create_backend()` in `src/llm/mod.rs`
+7. Add setup flow in `config.rs` init wizard
+8. Write tests
 
 ### Adding a New Language
 
 1. Add a variant to `Lang` enum in `src/i18n.rs`
-2. Create a new `static` translation table
+2. Create a new `static` translation table (including all `inject_*`, `chat_*`, and `select_command` fields)
 3. Add the match arm in `t()` function
 4. Update the language selector in `config.rs`
+
+### Adding a New Injection Pattern
+
+1. Add a variant to `InjectionReason` enum in `src/danger.rs`
+2. Add regex pattern tuple in `detect_injection()` patterns list
+3. Add `inject_*` field to `T` struct in `src/i18n.rs`
+4. Add translations for all 3 languages (zh, en, ja)
+5. Add match arm in `InjectionReason::message()`
+6. Add test case in `danger.rs` tests
+7. Update `all_langs_have_translations` test in `i18n.rs`
 
 ## Code of Conduct
 
