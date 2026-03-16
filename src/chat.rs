@@ -16,16 +16,13 @@ pub async fn run_chat(
     lang: &str,
     auto_confirm: bool,
     max_history: usize,
+    verbose: bool,
 ) -> Result<()> {
     let system_prompt = build_chat_system_prompt(ctx, lang);
     let mut history: Vec<Message> = Vec::new();
 
     println!();
-    println!(
-        "  {} {}",
-        "piz".green().bold(),
-        tr.chat_title.dimmed()
-    );
+    println!("  {} {}", "piz".green().bold(), tr.chat_title.dimmed());
     println!("  {}", tr.chat_hint.dimmed());
     println!();
 
@@ -61,6 +58,9 @@ pub async fn run_chat(
         }
 
         // Call LLM with full history
+        if verbose {
+            eprintln!("[verbose] chat history length: {}", history.len());
+        }
         let spinner = ui::create_spinner(tr.thinking);
         let response = backend.chat_with_history(&system_prompt, &history).await;
         spinner.finish_and_clear();
@@ -73,6 +73,10 @@ pub async fn run_chat(
                 continue;
             }
         };
+
+        if verbose {
+            eprintln!("[verbose] response: {}", response);
+        }
 
         // Parse response
         let (command, llm_danger) = match parse_llm_response(&response) {

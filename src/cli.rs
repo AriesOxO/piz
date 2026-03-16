@@ -22,6 +22,10 @@ pub struct Cli {
     #[arg(long)]
     pub no_cache: bool,
 
+    /// Show debug info (prompts and LLM responses)
+    #[arg(long)]
+    pub verbose: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }

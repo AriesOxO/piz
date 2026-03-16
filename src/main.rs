@@ -78,6 +78,7 @@ async fn run() -> Result<()> {
                     lang.code(),
                     cfg.auto_confirm_safe,
                     cfg.chat_history_size,
+                    cli.verbose,
                 )
                 .await;
             }
@@ -159,9 +160,18 @@ async fn run() -> Result<()> {
         prev_context.as_ref(),
     );
 
+    if cli.verbose {
+        eprintln!("[verbose] system prompt length: {} chars", system_prompt.len());
+        eprintln!("[verbose] user prompt: {}", user_prompt);
+    }
+
     let spinner = ui::create_spinner(tr.thinking);
     let response = backend.chat(&system_prompt, &user_prompt).await?;
     spinner.finish_and_clear();
+
+    if cli.verbose {
+        eprintln!("[verbose] response: {}", response);
+    }
 
     // Parse response (4-level fallback)
     let (command, llm_danger) = parse_llm_response(&response)?;
