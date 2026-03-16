@@ -332,130 +332,13 @@ async fn handle_command_with_autofix(
                 UserChoice::Edit(edited) => edited.as_str(),
                 _ => command,
             };
-            try_auto_fix(executed_cmd, exit_code, &stderr, tr, backend, ctx, lang).await?;
+            fix::try_auto_fix(executed_cmd, exit_code, &stderr, tr, backend, ctx, lang).await?;
         }
     }
 
     Ok(())
 }
 
-/// Maximum auto-fix retry attempts
-const MAX_AUTO_FIX_RETRIES: usize = 3;
-
-async fn try_auto_fix(
-    failed_cmd: &str,
-    exit_code: i32,
-    stderr: &str,
-    tr: &i18n::T,
-    backend: &dyn llm::LlmBackend,
-    ctx: &context::SystemContext,
-    lang: &str,
-) -> Result<()> {
-    println!();
-    let do_fix = dialoguer::Confirm::new()
-        .with_prompt(tr.auto_fix_prompt)
-        .default(true)
-        .interact()?;
-
-    if !do_fix {
-        return Ok(());
-    }
-
-    let mut current_cmd = failed_cmd.to_string();
-    let mut current_stderr = stderr.to_string();
-    let mut current_exit_code = exit_code;
-
-    for attempt in 1..=MAX_AUTO_FIX_RETRIES {
-        let spinner = ui::create_spinner(tr.auto_fix_attempting);
-        let (system, user) = llm::prompt::build_fix_prompt(
-            ctx,
-            &current_cmd,
-            current_exit_code,
-            &current_stderr,
-            lang,
-        );
-        let response = backend.chat(&system, &user).await?;
-        spinner.finish_and_clear();
-
-        let (diagnosis, fixed_cmd, llm_danger) = match fix::parse_fix_response(&response) {
-            Ok(r) => r,
-            Err(e) => {
-                ui::print_error(&format!("{} {}", tr.auto_fix_failed, e));
-                return Ok(());
-            }
-        };
-
-        ui::print_diagnosis(tr, &diagnosis);
-        ui::print_command_diff(&current_cmd, &fixed_cmd);
-        println!();
-
-        // Injection check on fix
-        if let Some(reason) = danger::detect_injection(&fixed_cmd) {
-            ui::print_error(&format!("{} {}", tr.auto_fix_failed, reason.message(tr)));
-            return Ok(());
-        }
-
-        let regex_danger = danger::detect_danger_regex(&fixed_cmd);
-        let final_danger = regex_danger.max(llm_danger);
-
-        let choice = executor::prompt_user(&fixed_cmd, final_danger, false, tr)?;
-        match choice {
-            UserChoice::Execute => {
-                let (code, _out, err) = executor::execute_command(&fixed_cmd, tr)?;
-                if code == 0 {
-                    return Ok(());
-                }
-                // Still failing — loop for next attempt
-                current_cmd = fixed_cmd;
-                current_stderr = err;
-                current_exit_code = code;
-
-                if attempt < MAX_AUTO_FIX_RETRIES {
-                    println!();
-                    ui::print_info(&format!(
-                        "{} ({}/{})",
-                        tr.auto_fix_attempting,
-                        attempt + 1,
-                        MAX_AUTO_FIX_RETRIES
-                    ));
-                }
-            }
-            UserChoice::Edit(edited) => {
-                // Re-check edited command for injection
-                if let Some(reason) = danger::detect_injection(&edited) {
-                    ui::print_error(&format!("{} {}", tr.auto_fix_failed, reason.message(tr)));
-                    return Ok(());
-                }
-                let (code, _out, err) = executor::execute_command(&edited, tr)?;
-                if code == 0 {
-                    return Ok(());
-                }
-                current_cmd = edited;
-                current_stderr = err;
-                current_exit_code = code;
-
-                if attempt < MAX_AUTO_FIX_RETRIES {
-                    println!();
-                    ui::print_info(&format!(
-                        "{} ({}/{})",
-                        tr.auto_fix_attempting,
-                        attempt + 1,
-                        MAX_AUTO_FIX_RETRIES
-                    ));
-                }
-            }
-            UserChoice::Cancel => {
-                return Ok(());
-            }
-        }
-    }
-
-    ui::print_error(&format!(
-        "{} reached max retries ({})",
-        tr.auto_fix_failed, MAX_AUTO_FIX_RETRIES
-    ));
-    Ok(())
-}
 
 /// Handle command in chat mode (non-fatal, continues the loop)
 pub fn handle_command_in_chat(
