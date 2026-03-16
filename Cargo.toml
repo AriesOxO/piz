@@ -29,6 +29,9 @@ thiserror = "1"
 indicatif = "0.17"
 async-trait = "0.1"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Globalization"] }
+
 [package.metadata.deb]
 section = "utils"
 assets = [

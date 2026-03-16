@@ -87,11 +87,19 @@ pub fn prompt_user(
 pub fn execute_command(command: &str, tr: &i18n::T) -> Result<(i32, String, String)> {
     let shell_cmd = if cfg!(target_os = "windows") {
         if std::env::var("PSModulePath").is_ok() {
+            // Force PowerShell to output UTF-8
+            let wrapped = format!(
+                "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; {}",
+                command
+            );
             Command::new("powershell")
-                .args(["-NoProfile", "-Command", command])
+                .args(["-NoProfile", "-Command", &wrapped])
                 .output()
         } else {
-            Command::new("cmd").args(["/C", command]).output()
+            // Force cmd to use UTF-8 codepage
+            Command::new("cmd")
+                .args(["/C", &format!("chcp 65001 >nul && {}", command)])
+                .output()
         }
     } else {
         Command::new("sh").args(["-c", command]).output()
@@ -99,8 +107,8 @@ pub fn execute_command(command: &str, tr: &i18n::T) -> Result<(i32, String, Stri
 
     let output = shell_cmd?;
     let exit_code = output.status.code().unwrap_or(-1);
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let stdout = decode_output(&output.stdout);
+    let stderr = decode_output(&output.stderr);
 
     if !stdout.is_empty() {
         print!("{}", stdout);
@@ -146,6 +154,57 @@ fn save_last_exec(command: &str, exit_code: i32, stdout: &str, stderr: &str) -> 
     let json = serde_json::to_string_pretty(&last)?;
     std::fs::write(path, json)?;
     Ok(())
+}
+
+/// Decode command output bytes to String.
+/// On Windows, if UTF-8 decode fails, try GBK (CP936) for Chinese Windows.
+fn decode_output(bytes: &[u8]) -> String {
+    match String::from_utf8(bytes.to_vec()) {
+        Ok(s) => s,
+        Err(_) => {
+            // Fallback: try GBK decoding for Chinese Windows
+            #[cfg(target_os = "windows")]
+            {
+                decode_gbk(bytes)
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                String::from_utf8_lossy(bytes).to_string()
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn decode_gbk(bytes: &[u8]) -> String {
+    // Simple GBK → UTF-8: use Windows API MultiByteToWideChar
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+
+    unsafe {
+        let codepage = 936; // GBK
+        let len = windows_sys::Win32::Globalization::MultiByteToWideChar(
+            codepage,
+            0,
+            bytes.as_ptr(),
+            bytes.len() as i32,
+            std::ptr::null_mut(),
+            0,
+        );
+        if len <= 0 {
+            return String::from_utf8_lossy(bytes).to_string();
+        }
+        let mut wide: Vec<u16> = vec![0; len as usize];
+        windows_sys::Win32::Globalization::MultiByteToWideChar(
+            codepage,
+            0,
+            bytes.as_ptr(),
+            bytes.len() as i32,
+            wide.as_mut_ptr(),
+            len,
+        );
+        OsString::from_wide(&wide).to_string_lossy().to_string()
+    }
 }
 
 pub fn load_last_exec() -> Result<LastExec> {
