@@ -35,10 +35,38 @@ async fn run() -> Result<()> {
 
     let cli = Cli::parse();
 
-    // Handle config --init before loading config
-    if let Some(Commands::Config { init }) = &cli.command {
+    // Handle config subcommand before loading config
+    if let Some(Commands::Config { init, show, reset }) = &cli.command {
         if *init {
             return config::init_config();
+        }
+        if *reset {
+            let path = config::config_path()?;
+            if path.exists() {
+                let confirm = dialoguer::Confirm::new()
+                    .with_prompt(format!("Delete {}?", path.display()))
+                    .default(false)
+                    .interact()?;
+                if confirm {
+                    std::fs::remove_file(&path)?;
+                    println!("Config reset. Run `piz config --init` to reconfigure.");
+                }
+            } else {
+                println!("No config file found.");
+            }
+            return Ok(());
+        }
+        if *show {
+            let path = config::config_path()?;
+            if path.exists() {
+                let content = std::fs::read_to_string(&path)?;
+                let masked = config::mask_config_keys(&content);
+                println!("Config path: {}", path.display());
+                println!("{}", masked);
+            } else {
+                println!("No config file found. Run `piz config --init` to create one.");
+            }
+            return Ok(());
         }
         let path = config::config_path()?;
         println!("Config path: {}", path.display());
@@ -82,7 +110,7 @@ async fn run() -> Result<()> {
                 )
                 .await;
             }
-            Commands::Config { .. } => unreachable!("Config handled earlier in run()"),
+            Commands::Config { .. } => unreachable!("Config handled earlier"),
         }
     }
 

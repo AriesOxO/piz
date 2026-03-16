@@ -41,6 +41,12 @@ pub enum Commands {
         /// Initialize default config file
         #[arg(long)]
         init: bool,
+        /// Show current configuration (API keys masked)
+        #[arg(long)]
+        show: bool,
+        /// Reset configuration (delete config file)
+        #[arg(long)]
+        reset: bool,
     },
     /// Clear the command cache
     ClearCache,

@@ -444,6 +444,37 @@ fn toml_escape(s: &str) -> String {
     value.to_string()
 }
 
+/// Mask an API key for display: show first 4 and last 4 chars if long enough
+pub fn mask_api_key(key: &str) -> String {
+    if key.len() > 8 {
+        format!("{}...{}", &key[..4], &key[key.len() - 4..])
+    } else {
+        "*".repeat(key.len())
+    }
+}
+
+/// Mask all api_key values in a TOML config string
+pub fn mask_config_keys(content: &str) -> String {
+    content
+        .lines()
+        .map(|line| {
+            if let Some(idx) = line.find("api_key") {
+                if let Some(eq_idx) = line[idx..].find('=') {
+                    let before = &line[..idx + eq_idx + 1];
+                    let value_part = line[idx + eq_idx + 1..].trim();
+                    if value_part.starts_with('"') && value_part.ends_with('"') && value_part.len() > 2
+                    {
+                        let key = &value_part[1..value_part.len() - 1];
+                        return format!("{} \"{}\"", before, mask_api_key(key));
+                    }
+                }
+            }
+            line.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Parse a TOML string into Config (useful for testing)
 pub fn parse_config(content: &str) -> Result<Config> {
     let config: Config = toml::from_str(content).context("Failed to parse config TOML")?;
@@ -518,6 +549,30 @@ api_key = "sk-test"
     fn parse_invalid_toml_errors() {
         let result = parse_config("this is not [valid toml");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn mask_api_key_long() {
+        assert_eq!(mask_api_key("sk-test-key-123456"), "sk-t...3456");
+    }
+
+    #[test]
+    fn mask_api_key_short() {
+        assert_eq!(mask_api_key("short"), "*****");
+    }
+
+    #[test]
+    fn mask_api_key_exact_8() {
+        assert_eq!(mask_api_key("12345678"), "********");
+    }
+
+    #[test]
+    fn mask_config_keys_masks_values() {
+        let content = "[openai]\napi_key = \"sk-test-key-123456\"\nmodel = \"gpt-4\"";
+        let masked = mask_config_keys(content);
+        assert!(masked.contains("sk-t...3456"));
+        assert!(!masked.contains("sk-test-key-123456"));
+        assert!(masked.contains("gpt-4"));
     }
 
     #[test]
