@@ -116,6 +116,23 @@ async fn run() -> Result<()> {
                 )
                 .await;
             }
+            Commands::History { search, limit } => {
+                let c = cache::Cache::open_with_max(cfg.cache_ttl_hours, cfg.cache_max_entries)?;
+                let entries = if let Some(pattern) = search {
+                    c.search_history(pattern, *limit)?
+                } else {
+                    c.list_history(*limit)?
+                };
+                if entries.is_empty() {
+                    println!("No history found.");
+                } else {
+                    for (query, command, exit_code, danger, _ts) in &entries {
+                        let status = if *exit_code == 0 { "✓" } else { "✗" };
+                        println!("  {} [{}] {} → {}", status, danger, query, command);
+                    }
+                }
+                return Ok(());
+            }
             Commands::Config { .. } => unreachable!("Config handled earlier"),
             Commands::Completions { .. } => unreachable!("Completions handled earlier"),
         }
@@ -227,7 +244,7 @@ async fn run() -> Result<()> {
         let _ = c.put(&query, &ctx.os, &ctx.shell, &command, final_danger.as_str());
     }
 
-    handle_command_with_autofix(
+    let result = handle_command_with_autofix(
         &command,
         final_danger,
         cfg.auto_confirm_safe,
@@ -236,7 +253,22 @@ async fn run() -> Result<()> {
         &ctx,
         lang.code(),
     )
-    .await
+    .await;
+
+    // Record execution in history
+    if let Some(ref c) = cache {
+        // Load last exec to get exit code
+        if let Ok(last) = executor::load_last_exec() {
+            let _ = c.record_execution(
+                &query,
+                &last.command,
+                last.exit_code,
+                final_danger.as_str(),
+            );
+        }
+    }
+
+    result
 }
 
 async fn handle_command_with_autofix(

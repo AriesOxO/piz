@@ -32,7 +32,15 @@ impl Cache {
                 command TEXT NOT NULL,
                 danger TEXT NOT NULL,
                 created_at INTEGER NOT NULL
-            )",
+            );
+            CREATE TABLE IF NOT EXISTS history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT NOT NULL,
+                command TEXT NOT NULL,
+                exit_code INTEGER NOT NULL,
+                danger TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );",
         )?;
 
         let cache = Self {
@@ -59,7 +67,15 @@ impl Cache {
                 command TEXT NOT NULL,
                 danger TEXT NOT NULL,
                 created_at INTEGER NOT NULL
-            )",
+            );
+            CREATE TABLE IF NOT EXISTS history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT NOT NULL,
+                command TEXT NOT NULL,
+                exit_code INTEGER NOT NULL,
+                danger TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );",
         )?;
         Ok(Self {
             conn,
@@ -144,6 +160,57 @@ impl Cache {
     pub fn clear(&self) -> Result<u64> {
         let count = self.conn.execute("DELETE FROM cache", [])?;
         Ok(count as u64)
+    }
+
+    pub fn record_execution(
+        &self,
+        query: &str,
+        command: &str,
+        exit_code: i32,
+        danger: &str,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO history (query, command, exit_code, danger, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![query, command, exit_code, danger, now_secs()],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_history(&self, limit: usize) -> Result<Vec<(String, String, i32, String, u64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT query, command, exit_code, danger, created_at FROM history ORDER BY id DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![limit], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn search_history(
+        &self,
+        pattern: &str,
+        limit: usize,
+    ) -> Result<Vec<(String, String, i32, String, u64)>> {
+        let like = format!("%{}%", pattern);
+        let mut stmt = self.conn.prepare(
+            "SELECT query, command, exit_code, danger, created_at FROM history WHERE query LIKE ?1 OR command LIKE ?1 ORDER BY id DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![like, limit], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
     pub(crate) fn make_key(query: &str, os: &str, shell: &str) -> String {
@@ -261,6 +328,34 @@ mod tests {
         // With TTL 0, created_at + 0 is not > now, so it should miss
         let result = cache.get("q", "Linux", "bash").unwrap();
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn record_and_list_history() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache
+            .record_execution("list files", "ls -la", 0, "safe")
+            .unwrap();
+        cache
+            .record_execution("disk usage", "df -h", 0, "safe")
+            .unwrap();
+        let entries = cache.list_history(10).unwrap();
+        assert_eq!(entries.len(), 2);
+        // Both inserted, order by id DESC when same timestamp
+    }
+
+    #[test]
+    fn search_history_by_pattern() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache
+            .record_execution("list files", "ls -la", 0, "safe")
+            .unwrap();
+        cache
+            .record_execution("disk usage", "df -h", 0, "safe")
+            .unwrap();
+        let results = cache.search_history("files", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0, "list files");
     }
 
     #[test]

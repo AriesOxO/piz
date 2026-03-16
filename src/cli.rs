@@ -50,6 +50,14 @@ pub enum Commands {
     },
     /// Clear the command cache
     ClearCache,
+    /// View command execution history
+    History {
+        /// Search pattern to filter history
+        search: Option<String>,
+        /// Number of entries to show
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+    },
     /// Generate shell completions
     Completions {
         /// Shell type (bash, zsh, fish, powershell)
