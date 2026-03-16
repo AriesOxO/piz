@@ -29,6 +29,10 @@ async fn main() {
 }
 
 async fn run() -> Result<()> {
+    if std::env::var("NO_COLOR").is_ok() {
+        colored::control::set_override(false);
+    }
+
     let cli = Cli::parse();
 
     // Handle config --init before loading config

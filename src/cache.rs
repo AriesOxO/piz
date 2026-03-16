@@ -134,6 +134,13 @@ impl Cache {
         Ok(())
     }
 
+    pub fn delete(&self, query: &str, os: &str, shell: &str) -> Result<()> {
+        let key = Self::make_key(query, os, shell);
+        self.conn
+            .execute("DELETE FROM cache WHERE key = ?1", rusqlite::params![key])?;
+        Ok(())
+    }
+
     pub fn clear(&self) -> Result<u64> {
         let count = self.conn.execute("DELETE FROM cache", [])?;
         Ok(count as u64)
