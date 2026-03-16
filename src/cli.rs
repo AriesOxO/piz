@@ -30,6 +30,8 @@ pub struct Cli {
 pub enum Commands {
     /// Fix the last failed command
     Fix,
+    /// Interactive chat mode with context
+    Chat,
     /// Initialize or show configuration
     Config {
         /// Initialize default config file

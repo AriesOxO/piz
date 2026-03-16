@@ -8,9 +8,26 @@ use crate::config::Config;
 use anyhow::Result;
 use async_trait::async_trait;
 
+/// A message in a conversation
+#[derive(Debug, Clone)]
+pub struct Message {
+    pub role: String, // "user" or "assistant"
+    pub content: String,
+}
+
 #[async_trait]
 pub trait LlmBackend: Send + Sync {
     async fn chat(&self, system: &str, user: &str) -> Result<String>;
+
+    /// Multi-turn chat with message history
+    async fn chat_with_history(&self, system: &str, messages: &[Message]) -> Result<String> {
+        // Default: ignore history, just use the last user message
+        if let Some(last) = messages.iter().rev().find(|m| m.role == "user") {
+            self.chat(system, &last.content).await
+        } else {
+            anyhow::bail!("No user message in history")
+        }
+    }
 }
 
 /// A mock backend for testing that returns a preset response.

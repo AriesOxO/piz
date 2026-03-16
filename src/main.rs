@@ -1,4 +1,5 @@
 mod cache;
+mod chat;
 mod cli;
 mod config;
 mod context;
@@ -63,6 +64,18 @@ async fn run() -> Result<()> {
                 let backend = llm::create_backend(&cfg, cli.backend.as_deref())?;
                 return fix::fix_last_command(backend.as_ref(), &ctx, tr, lang.code()).await;
             }
+            Commands::Chat => {
+                let ctx = context::collect_context();
+                let backend = llm::create_backend(&cfg, cli.backend.as_deref())?;
+                return chat::run_chat(
+                    backend.as_ref(),
+                    &ctx,
+                    tr,
+                    lang.code(),
+                    cfg.auto_confirm_safe,
+                )
+                .await;
+            }
             Commands::Config { .. } => unreachable!(),
         }
     }
@@ -97,10 +110,21 @@ async fn run() -> Result<()> {
         }
     }
 
-    // Call LLM
+    // Call LLM (with implicit context from last execution)
     let backend = llm::create_backend(&cfg, cli.backend.as_deref())?;
-    let (system_prompt, user_prompt) =
-        llm::prompt::build_translate_prompt(&ctx, &query, lang.code());
+    let prev_context = executor::load_last_exec()
+        .ok()
+        .map(|last| llm::prompt::PrevContext {
+            command: last.command,
+            exit_code: last.exit_code,
+            stdout_preview: last.stderr.lines().take(3).collect::<Vec<_>>().join("\n"),
+        });
+    let (system_prompt, user_prompt) = llm::prompt::build_translate_prompt_with_context(
+        &ctx,
+        &query,
+        lang.code(),
+        prev_context.as_ref(),
+    );
 
     let spinner = ui::create_spinner(tr.thinking);
     let response = backend.chat(&system_prompt, &user_prompt).await?;
@@ -153,6 +177,33 @@ fn handle_command(
         }
     }
     Ok(())
+}
+
+/// Handle command in chat mode (non-fatal, continues the loop)
+pub fn handle_command_in_chat(
+    command: &str,
+    danger: DangerLevel,
+    auto_confirm: bool,
+    tr: &i18n::T,
+) {
+    let choice = match executor::prompt_user(command, danger, auto_confirm, tr) {
+        Ok(c) => c,
+        Err(e) => {
+            ui::print_error(&format!("{:#}", e));
+            return;
+        }
+    };
+    match choice {
+        UserChoice::Execute => {
+            let _ = executor::execute_command(command, tr);
+        }
+        UserChoice::Edit(edited) => {
+            let _ = executor::execute_command(&edited, tr);
+        }
+        UserChoice::Cancel => {
+            ui::print_info(tr.cancelled);
+        }
+    }
 }
 
 /// Check if LLM response is a refusal (non-command input detected)

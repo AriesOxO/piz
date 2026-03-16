@@ -13,6 +13,7 @@ use crate::ui;
 pub struct LastExec {
     pub command: String,
     pub exit_code: i32,
+    pub stdout: String,
     pub stderr: String,
     pub timestamp: u64,
 }
@@ -108,7 +109,7 @@ pub fn execute_command(command: &str, tr: &i18n::T) -> Result<(i32, String, Stri
         eprint!("{}", stderr.dimmed());
     }
 
-    save_last_exec(command, exit_code, &stderr)?;
+    save_last_exec(command, exit_code, &stdout, &stderr)?;
 
     if exit_code != 0 {
         println!(
@@ -122,15 +123,20 @@ pub fn execute_command(command: &str, tr: &i18n::T) -> Result<(i32, String, Stri
     Ok((exit_code, stdout, stderr))
 }
 
-fn save_last_exec(command: &str, exit_code: i32, stderr: &str) -> Result<()> {
+fn save_last_exec(command: &str, exit_code: i32, stdout: &str, stderr: &str) -> Result<()> {
     let dir = config::piz_dir()?;
     std::fs::create_dir_all(&dir)?;
     let path = dir.join("last_exec.json");
 
+    // Keep only first 500 chars of output to avoid huge files
+    let stdout_preview: String = stdout.chars().take(500).collect();
+    let stderr_preview: String = stderr.chars().take(500).collect();
+
     let last = LastExec {
         command: command.to_string(),
         exit_code,
-        stderr: stderr.to_string(),
+        stdout: stdout_preview,
+        stderr: stderr_preview,
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
