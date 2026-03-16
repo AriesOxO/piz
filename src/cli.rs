@@ -71,6 +71,8 @@ pub enum Commands {
         /// Shell type (bash, zsh, fish, powershell)
         shell: clap_complete::Shell,
     },
+    /// Check for updates and upgrade piz
+    Update,
 }
 
 impl Cli {

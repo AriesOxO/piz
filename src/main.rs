@@ -11,6 +11,7 @@ mod history;
 mod i18n;
 mod llm;
 mod ui;
+mod update;
 
 use anyhow::Result;
 use clap::Parser;
@@ -39,6 +40,19 @@ async fn run() -> Result<()> {
     if let Some(Commands::Completions { shell }) = &cli.command {
         Cli::generate_completions(*shell);
         return Ok(());
+    }
+
+    // Handle update before loading config (no config needed)
+    if let Some(Commands::Update) = &cli.command {
+        // Load config for language if available, fallback to zh
+        let lang = config::config_path()
+            .ok()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|c| toml::from_str::<config::Config>(&c).ok())
+            .map(|c| Lang::from_code(&c.language))
+            .unwrap_or(Lang::Zh);
+        let tr = i18n::t(lang);
+        return update::run_update(tr).await;
     }
 
     // Handle config subcommand before loading config
@@ -135,6 +149,7 @@ async fn run() -> Result<()> {
             }
             Commands::Config { .. } => unreachable!("Config handled earlier"),
             Commands::Completions { .. } => unreachable!("Completions handled earlier"),
+            Commands::Update => unreachable!("Update handled earlier"),
         }
     }
 
@@ -309,6 +324,11 @@ async fn run() -> Result<()> {
             let _ =
                 c.record_execution(&query, &last.command, last.exit_code, final_danger.as_str());
         }
+    }
+
+    // Check for updates (at most once per 24h, fast: reads local state or 5s timeout)
+    if !cli.pipe {
+        update::check_update_hint().await;
     }
 
     result
