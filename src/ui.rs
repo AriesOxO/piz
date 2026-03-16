@@ -42,6 +42,14 @@ pub fn print_diagnosis(tr: &i18n::T, diagnosis: &str) {
     println!("  {}", diagnosis);
 }
 
+pub fn print_command_diff(original: &str, fixed: &str) {
+    if original == fixed || original.is_empty() || fixed.is_empty() {
+        return;
+    }
+    println!("  {} {}", "-".red(), original.red().strikethrough());
+    println!("  {} {}", "+".green(), fixed.green().bold());
+}
+
 pub fn create_spinner(msg: &str) -> ProgressBar {
     let pb = ProgressBar::new_spinner();
     pb.set_style(

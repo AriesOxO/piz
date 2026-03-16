@@ -386,6 +386,7 @@ async fn try_auto_fix(
         };
 
         ui::print_diagnosis(tr, &diagnosis);
+        ui::print_command_diff(&current_cmd, &fixed_cmd);
         println!();
 
         // Injection check on fix
