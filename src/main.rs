@@ -147,7 +147,15 @@ async fn run() -> Result<()> {
     }
 
     // Main flow: natural language → command
-    let query = cli.query.join(" ");
+    let mut query = cli.query.join(" ");
+
+    // In pipe mode, read from stdin if no query args
+    if cli.pipe && query.is_empty() {
+        let mut buf = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)?;
+        query = buf.trim().to_string();
+    }
+
     if query.is_empty() {
         Cli::parse_from(["piz", "--help"]);
         return Ok(());
@@ -177,6 +185,12 @@ async fn run() -> Result<()> {
                 ui::print_info(reason.message(tr));
                 let _ = c.delete(&query, &ctx.os, &ctx.shell);
                 anyhow::bail!("Cached command blocked: {}", reason.message(tr));
+            }
+
+            // Pipe mode: output only the command
+            if cli.pipe {
+                println!("{}", cached_cmd);
+                return Ok(());
             }
 
             ui::print_cached(tr);
@@ -217,9 +231,14 @@ async fn run() -> Result<()> {
         eprintln!("[verbose] user prompt: {}", user_prompt);
     }
 
-    let spinner = ui::create_spinner(tr.thinking);
-    let response = backend.chat(&system_prompt, &user_prompt).await?;
-    spinner.finish_and_clear();
+    let response = if cli.pipe {
+        backend.chat(&system_prompt, &user_prompt).await?
+    } else {
+        let spinner = ui::create_spinner(tr.thinking);
+        let r = backend.chat(&system_prompt, &user_prompt).await?;
+        spinner.finish_and_clear();
+        r
+    };
 
     if cli.verbose {
         eprintln!("[verbose] response: {}", response);
@@ -230,9 +249,17 @@ async fn run() -> Result<()> {
 
     // Injection detection
     if let Some(reason) = danger::detect_injection(&command) {
-        ui::print_danger(tr);
-        ui::print_info(reason.message(tr));
+        if !cli.pipe {
+            ui::print_danger(tr);
+            ui::print_info(reason.message(tr));
+        }
         anyhow::bail!("Command blocked: {}", reason.message(tr));
+    }
+
+    // Pipe mode: output only the command
+    if cli.pipe {
+        println!("{}", command);
+        return Ok(());
     }
 
     // Danger detection: regex + LLM

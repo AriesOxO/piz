@@ -26,6 +26,10 @@ pub struct Cli {
     #[arg(long)]
     pub verbose: bool,
 
+    /// Pipe mode: output only the command, no UI
+    #[arg(long)]
+    pub pipe: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
