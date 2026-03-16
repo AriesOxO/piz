@@ -28,35 +28,47 @@ impl ClaudeBackend {
     }
 
     async fn send_request(&self, body: serde_json::Value) -> Result<String> {
-        let resp = self
-            .client
-            .post(self.build_url())
-            .header("x-api-key", &self.config.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send request to Claude")?;
+        let url = self.build_url();
+        let mut last_err = None;
 
-        let status = resp.status();
-        let text = resp
-            .text()
-            .await
-            .context("Failed to read Claude response")?;
+        for attempt in 0..super::MAX_RETRIES {
+            let resp = self
+                .client
+                .post(&url)
+                .header("x-api-key", &self.config.api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .context("Failed to send request to Claude")?;
 
-        if !status.is_success() {
+            let status = resp.status();
+            let text = resp
+                .text()
+                .await
+                .context("Failed to read Claude response")?;
+
+            if status.is_success() {
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&text).context("Failed to parse Claude response")?;
+                return parsed["content"][0]["text"]
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| anyhow::anyhow!("Unexpected Claude response format"));
+            }
+
+            if super::should_retry(status) && attempt + 1 < super::MAX_RETRIES {
+                super::backoff_delay(attempt).await;
+                last_err = Some(format!("Claude API error ({}): {}", status, text.chars().take(500).collect::<String>()));
+                continue;
+            }
+
             let preview: String = text.chars().take(500).collect();
             anyhow::bail!("Claude API error ({}): {}", status, preview);
         }
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(&text).context("Failed to parse Claude response")?;
-
-        parsed["content"][0]["text"]
-            .as_str()
-            .map(|s| s.to_string())
-            .ok_or_else(|| anyhow::anyhow!("Unexpected Claude response format"))
+        anyhow::bail!("{}", last_err.unwrap_or_else(|| "Claude request failed".into()))
     }
 }
 

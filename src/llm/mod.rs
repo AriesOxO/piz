@@ -18,6 +18,23 @@ pub(crate) const DEFAULT_TEMPERATURE: f64 = 0.1;
 /// Default max tokens for all LLM backends
 pub(crate) const DEFAULT_MAX_TOKENS: u32 = 2048;
 
+/// Maximum number of retries for transient API errors
+pub(crate) const MAX_RETRIES: u32 = 3;
+
+/// Initial backoff delay in milliseconds
+pub(crate) const INITIAL_BACKOFF_MS: u64 = 1000;
+
+/// Check if an HTTP status code should trigger a retry
+pub(crate) fn should_retry(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
+}
+
+/// Sleep with exponential backoff
+pub(crate) async fn backoff_delay(attempt: u32) {
+    let ms = INITIAL_BACKOFF_MS * 2u64.pow(attempt);
+    tokio::time::sleep(Duration::from_millis(ms)).await;
+}
+
 /// A message in a conversation
 #[derive(Debug, Clone)]
 pub struct Message {
@@ -173,6 +190,36 @@ mod tests {
             .unwrap()
             .to_string()
             .contains("Claude config not found"));
+    }
+
+    #[test]
+    fn should_retry_on_429() {
+        assert!(should_retry(reqwest::StatusCode::TOO_MANY_REQUESTS));
+    }
+
+    #[test]
+    fn should_retry_on_500() {
+        assert!(should_retry(reqwest::StatusCode::INTERNAL_SERVER_ERROR));
+    }
+
+    #[test]
+    fn should_retry_on_503() {
+        assert!(should_retry(reqwest::StatusCode::SERVICE_UNAVAILABLE));
+    }
+
+    #[test]
+    fn should_not_retry_on_400() {
+        assert!(!should_retry(reqwest::StatusCode::BAD_REQUEST));
+    }
+
+    #[test]
+    fn should_not_retry_on_401() {
+        assert!(!should_retry(reqwest::StatusCode::UNAUTHORIZED));
+    }
+
+    #[test]
+    fn should_not_retry_on_200() {
+        assert!(!should_retry(reqwest::StatusCode::OK));
     }
 
     #[tokio::test]

@@ -23,32 +23,44 @@ impl OllamaBackend {
     }
 
     async fn send_request(&self, body: serde_json::Value) -> Result<String> {
-        let resp = self
-            .client
-            .post(self.build_url())
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send request to Ollama")?;
+        let url = self.build_url();
+        let mut last_err = None;
 
-        let status = resp.status();
-        let text = resp
-            .text()
-            .await
-            .context("Failed to read Ollama response")?;
+        for attempt in 0..super::MAX_RETRIES {
+            let resp = self
+                .client
+                .post(&url)
+                .json(&body)
+                .send()
+                .await
+                .context("Failed to send request to Ollama")?;
 
-        if !status.is_success() {
+            let status = resp.status();
+            let text = resp
+                .text()
+                .await
+                .context("Failed to read Ollama response")?;
+
+            if status.is_success() {
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&text).context("Failed to parse Ollama response")?;
+                return parsed["message"]["content"]
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| anyhow::anyhow!("Unexpected Ollama response format"));
+            }
+
+            if super::should_retry(status) && attempt + 1 < super::MAX_RETRIES {
+                super::backoff_delay(attempt).await;
+                last_err = Some(format!("Ollama API error ({}): {}", status, text.chars().take(500).collect::<String>()));
+                continue;
+            }
+
             let preview: String = text.chars().take(500).collect();
             anyhow::bail!("Ollama API error ({}): {}", status, preview);
         }
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(&text).context("Failed to parse Ollama response")?;
-
-        parsed["message"]["content"]
-            .as_str()
-            .map(|s| s.to_string())
-            .ok_or_else(|| anyhow::anyhow!("Unexpected Ollama response format"))
+        anyhow::bail!("{}", last_err.unwrap_or_else(|| "Ollama request failed".into()))
     }
 }
 

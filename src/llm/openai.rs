@@ -28,34 +28,46 @@ impl OpenAiBackend {
     }
 
     async fn send_request(&self, body: serde_json::Value) -> Result<String> {
-        let resp = self
-            .client
-            .post(self.build_url())
-            .header("Authorization", format!("Bearer {}", self.config.api_key))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send request to OpenAI")?;
+        let url = self.build_url();
+        let mut last_err = None;
 
-        let status = resp.status();
-        let text = resp
-            .text()
-            .await
-            .context("Failed to read OpenAI response")?;
+        for attempt in 0..super::MAX_RETRIES {
+            let resp = self
+                .client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", self.config.api_key))
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .context("Failed to send request to OpenAI")?;
 
-        if !status.is_success() {
+            let status = resp.status();
+            let text = resp
+                .text()
+                .await
+                .context("Failed to read OpenAI response")?;
+
+            if status.is_success() {
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&text).context("Failed to parse OpenAI response")?;
+                return parsed["choices"][0]["message"]["content"]
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| anyhow::anyhow!("Unexpected OpenAI response format"));
+            }
+
+            if super::should_retry(status) && attempt + 1 < super::MAX_RETRIES {
+                super::backoff_delay(attempt).await;
+                last_err = Some(format!("OpenAI API error ({}): {}", status, text.chars().take(500).collect::<String>()));
+                continue;
+            }
+
             let preview: String = text.chars().take(500).collect();
             anyhow::bail!("OpenAI API error ({}): {}", status, preview);
         }
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(&text).context("Failed to parse OpenAI response")?;
-
-        parsed["choices"][0]["message"]["content"]
-            .as_str()
-            .map(|s| s.to_string())
-            .ok_or_else(|| anyhow::anyhow!("Unexpected OpenAI response format"))
+        anyhow::bail!("{}", last_err.unwrap_or_else(|| "OpenAI request failed".into()))
     }
 }
 

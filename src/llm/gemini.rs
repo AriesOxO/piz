@@ -32,44 +32,57 @@ impl GeminiBackend {
     }
 
     async fn send_request(&self, body: serde_json::Value) -> Result<String> {
-        let resp = self
-            .client
-            .post(self.build_url())
-            .header("Content-Type", "application/json")
-            .header("x-goog-api-key", &self.config.api_key)
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send request to Gemini")?;
+        let url = self.build_url();
+        let mut last_err = None;
 
-        let status = resp.status();
-        let text = resp
-            .text()
-            .await
-            .context("Failed to read Gemini response")?;
+        for attempt in 0..super::MAX_RETRIES {
+            let resp = self
+                .client
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header("x-goog-api-key", &self.config.api_key)
+                .json(&body)
+                .send()
+                .await
+                .context("Failed to send request to Gemini")?;
 
-        if !status.is_success() {
+            let status = resp.status();
+            let text = resp
+                .text()
+                .await
+                .context("Failed to read Gemini response")?;
+
+            if status.is_success() {
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&text).context("Failed to parse Gemini response")?;
+
+                // Check for safety block
+                if let Some(reason) = parsed["promptFeedback"]["blockReason"].as_str() {
+                    anyhow::bail!("Gemini blocked the request: {}", reason);
+                }
+                if let Some(reason) = parsed["candidates"][0]["finishReason"].as_str() {
+                    if reason == "SAFETY" {
+                        anyhow::bail!("Gemini response blocked due to safety filters");
+                    }
+                }
+
+                return parsed["candidates"][0]["content"]["parts"][0]["text"]
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| anyhow::anyhow!("Unexpected Gemini response format"));
+            }
+
+            if super::should_retry(status) && attempt + 1 < super::MAX_RETRIES {
+                super::backoff_delay(attempt).await;
+                last_err = Some(format!("Gemini API error ({}): {}", status, text.chars().take(500).collect::<String>()));
+                continue;
+            }
+
             let preview: String = text.chars().take(500).collect();
             anyhow::bail!("Gemini API error ({}): {}", status, preview);
         }
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(&text).context("Failed to parse Gemini response")?;
-
-        // Check for safety block
-        if let Some(reason) = parsed["promptFeedback"]["blockReason"].as_str() {
-            anyhow::bail!("Gemini blocked the request: {}", reason);
-        }
-        if let Some(reason) = parsed["candidates"][0]["finishReason"].as_str() {
-            if reason == "SAFETY" {
-                anyhow::bail!("Gemini response blocked due to safety filters");
-            }
-        }
-
-        parsed["candidates"][0]["content"]["parts"][0]["text"]
-            .as_str()
-            .map(|s| s.to_string())
-            .ok_or_else(|| anyhow::anyhow!("Unexpected Gemini response format"))
+        anyhow::bail!("{}", last_err.unwrap_or_else(|| "Gemini request failed".into()))
     }
 }
 
