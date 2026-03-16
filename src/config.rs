@@ -462,7 +462,9 @@ pub fn mask_config_keys(content: &str) -> String {
                 if let Some(eq_idx) = line[idx..].find('=') {
                     let before = &line[..idx + eq_idx + 1];
                     let value_part = line[idx + eq_idx + 1..].trim();
-                    if value_part.starts_with('"') && value_part.ends_with('"') && value_part.len() > 2
+                    if value_part.starts_with('"')
+                        && value_part.ends_with('"')
+                        && value_part.len() > 2
                     {
                         let key = &value_part[1..value_part.len() - 1];
                         return format!("{} \"{}\"", before, mask_api_key(key));

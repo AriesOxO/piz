@@ -75,11 +75,6 @@ pub enum Commands {
 
 impl Cli {
     pub fn generate_completions(shell: clap_complete::Shell) {
-        clap_complete::generate(
-            shell,
-            &mut Self::command(),
-            "piz",
-            &mut std::io::stdout(),
-        );
+        clap_complete::generate(shell, &mut Self::command(), "piz", &mut std::io::stdout());
     }
 }

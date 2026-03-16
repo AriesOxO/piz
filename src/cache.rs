@@ -4,6 +4,9 @@ use sha2::{Digest, Sha256};
 
 use crate::config;
 
+/// A history entry: (query, command, exit_code, danger, created_at)
+pub type HistoryEntry = (String, String, i32, String, u64);
+
 pub struct Cache {
     conn: Connection,
     ttl_hours: u64,
@@ -176,7 +179,7 @@ impl Cache {
         Ok(())
     }
 
-    pub fn list_history(&self, limit: usize) -> Result<Vec<(String, String, i32, String, u64)>> {
+    pub fn list_history(&self, limit: usize) -> Result<Vec<HistoryEntry>> {
         let mut stmt = self.conn.prepare(
             "SELECT query, command, exit_code, danger, created_at FROM history ORDER BY id DESC LIMIT ?1",
         )?;
@@ -192,11 +195,7 @@ impl Cache {
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
-    pub fn search_history(
-        &self,
-        pattern: &str,
-        limit: usize,
-    ) -> Result<Vec<(String, String, i32, String, u64)>> {
+    pub fn search_history(&self, pattern: &str, limit: usize) -> Result<Vec<HistoryEntry>> {
         let like = format!("%{}%", pattern);
         let mut stmt = self.conn.prepare(
             "SELECT query, command, exit_code, danger, created_at FROM history WHERE query LIKE ?1 OR command LIKE ?1 ORDER BY id DESC LIMIT ?2",

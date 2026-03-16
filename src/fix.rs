@@ -105,13 +105,8 @@ pub async fn try_auto_fix(
 
     for attempt in 1..=MAX_AUTO_FIX_RETRIES {
         let spinner = ui::create_spinner(tr.auto_fix_attempting);
-        let (system, user) = build_fix_prompt(
-            ctx,
-            &current_cmd,
-            current_exit_code,
-            &current_stderr,
-            lang,
-        );
+        let (system, user) =
+            build_fix_prompt(ctx, &current_cmd, current_exit_code, &current_stderr, lang);
         let response = backend.chat(&system, &user).await?;
         spinner.finish_and_clear();
 

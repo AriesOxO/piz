@@ -52,7 +52,11 @@ impl OllamaBackend {
 
             if super::should_retry(status) && attempt + 1 < super::MAX_RETRIES {
                 super::backoff_delay(attempt).await;
-                last_err = Some(format!("Ollama API error ({}): {}", status, text.chars().take(500).collect::<String>()));
+                last_err = Some(format!(
+                    "Ollama API error ({}): {}",
+                    status,
+                    text.chars().take(500).collect::<String>()
+                ));
                 continue;
             }
 
@@ -60,7 +64,10 @@ impl OllamaBackend {
             anyhow::bail!("Ollama API error ({}): {}", status, preview);
         }
 
-        anyhow::bail!("{}", last_err.unwrap_or_else(|| "Ollama request failed".into()))
+        anyhow::bail!(
+            "{}",
+            last_err.unwrap_or_else(|| "Ollama request failed".into())
+        )
     }
 }
 

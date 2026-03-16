@@ -188,10 +188,7 @@ fn compiled_injection_patterns() -> &'static CompiledInjectionPatterns {
                 r#"(python[23]?|perl|ruby|php)\s+.*-[ce]\s+.*(socket|connect|exec|pty\.spawn)"#,
                 InjectionReason::ReverseShell,
             ),
-            (
-                r#"eval\s+.*\$\((curl|wget)"#,
-                InjectionReason::EvalRemote,
-            ),
+            (r#"eval\s+.*\$\((curl|wget)"#, InjectionReason::EvalRemote),
             (
                 r#"(source|\.|\bbash\b)\s+<\(\s*(curl|wget)"#,
                 InjectionReason::SourceRemote,

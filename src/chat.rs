@@ -116,7 +116,11 @@ pub async fn run_chat(
         if history.len() > max_history {
             let excess = history.len() - max_history;
             // Round up to even number to preserve user/assistant pairing
-            let drain_count = if excess % 2 == 0 { excess } else { excess + 1 };
+            let drain_count = if excess.is_multiple_of(2) {
+                excess
+            } else {
+                excess + 1
+            };
             let drain_count = drain_count.min(history.len() - 1);
             history.drain(..drain_count);
         }

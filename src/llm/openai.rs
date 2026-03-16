@@ -59,7 +59,11 @@ impl OpenAiBackend {
 
             if super::should_retry(status) && attempt + 1 < super::MAX_RETRIES {
                 super::backoff_delay(attempt).await;
-                last_err = Some(format!("OpenAI API error ({}): {}", status, text.chars().take(500).collect::<String>()));
+                last_err = Some(format!(
+                    "OpenAI API error ({}): {}",
+                    status,
+                    text.chars().take(500).collect::<String>()
+                ));
                 continue;
             }
 
@@ -67,7 +71,10 @@ impl OpenAiBackend {
             anyhow::bail!("OpenAI API error ({}): {}", status, preview);
         }
 
-        anyhow::bail!("{}", last_err.unwrap_or_else(|| "OpenAI request failed".into()))
+        anyhow::bail!(
+            "{}",
+            last_err.unwrap_or_else(|| "OpenAI request failed".into())
+        )
     }
 }
 

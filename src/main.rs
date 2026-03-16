@@ -240,7 +240,10 @@ async fn run() -> Result<()> {
     };
 
     if cli.verbose {
-        eprintln!("[verbose] system prompt length: {} chars", system_prompt.len());
+        eprintln!(
+            "[verbose] system prompt length: {} chars",
+            system_prompt.len()
+        );
         eprintln!("[verbose] user prompt: {}", user_prompt);
     }
 
@@ -303,12 +306,8 @@ async fn run() -> Result<()> {
     if let Some(ref c) = cache {
         // Load last exec to get exit code
         if let Ok(last) = executor::load_last_exec() {
-            let _ = c.record_execution(
-                &query,
-                &last.command,
-                last.exit_code,
-                final_danger.as_str(),
-            );
+            let _ =
+                c.record_execution(&query, &last.command, last.exit_code, final_danger.as_str());
         }
     }
 
@@ -355,7 +354,6 @@ async fn handle_command_with_autofix(
 
     Ok(())
 }
-
 
 /// A candidate command from multi-candidate response
 struct Candidate {

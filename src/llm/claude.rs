@@ -60,7 +60,11 @@ impl ClaudeBackend {
 
             if super::should_retry(status) && attempt + 1 < super::MAX_RETRIES {
                 super::backoff_delay(attempt).await;
-                last_err = Some(format!("Claude API error ({}): {}", status, text.chars().take(500).collect::<String>()));
+                last_err = Some(format!(
+                    "Claude API error ({}): {}",
+                    status,
+                    text.chars().take(500).collect::<String>()
+                ));
                 continue;
             }
 
@@ -68,7 +72,10 @@ impl ClaudeBackend {
             anyhow::bail!("Claude API error ({}): {}", status, preview);
         }
 
-        anyhow::bail!("{}", last_err.unwrap_or_else(|| "Claude request failed".into()))
+        anyhow::bail!(
+            "{}",
+            last_err.unwrap_or_else(|| "Claude request failed".into())
+        )
     }
 }
 

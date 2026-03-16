@@ -466,20 +466,68 @@ mod tests {
             assert!(!tr.chat_hint.is_empty(), "{:?}: chat_hint", lang);
             assert!(!tr.bye.is_empty(), "{:?}: bye", lang);
             assert!(!tr.chat_help_desc.is_empty(), "{:?}: chat_help_desc", lang);
-            assert!(!tr.chat_clear_desc.is_empty(), "{:?}: chat_clear_desc", lang);
-            assert!(!tr.chat_history_desc.is_empty(), "{:?}: chat_history_desc", lang);
+            assert!(
+                !tr.chat_clear_desc.is_empty(),
+                "{:?}: chat_clear_desc",
+                lang
+            );
+            assert!(
+                !tr.chat_history_desc.is_empty(),
+                "{:?}: chat_history_desc",
+                lang
+            );
             assert!(!tr.chat_cleared.is_empty(), "{:?}: chat_cleared", lang);
-            assert!(!tr.chat_unknown_cmd.is_empty(), "{:?}: chat_unknown_cmd", lang);
+            assert!(
+                !tr.chat_unknown_cmd.is_empty(),
+                "{:?}: chat_unknown_cmd",
+                lang
+            );
             assert!(!tr.select_command.is_empty(), "{:?}: select_command", lang);
-            assert!(!tr.inject_env_exfiltration.is_empty(), "{:?}: inject_env_exfiltration", lang);
-            assert!(!tr.inject_base64_shell.is_empty(), "{:?}: inject_base64_shell", lang);
-            assert!(!tr.inject_reverse_shell.is_empty(), "{:?}: inject_reverse_shell", lang);
-            assert!(!tr.inject_eval_remote.is_empty(), "{:?}: inject_eval_remote", lang);
-            assert!(!tr.inject_source_remote.is_empty(), "{:?}: inject_source_remote", lang);
-            assert!(!tr.inject_overwrite_config.is_empty(), "{:?}: inject_overwrite_config", lang);
-            assert!(!tr.inject_crontab_modify.is_empty(), "{:?}: inject_crontab_modify", lang);
-            assert!(!tr.inject_download_execute.is_empty(), "{:?}: inject_download_execute", lang);
-            assert!(!tr.inject_config_file_attack.is_empty(), "{:?}: inject_config_file_attack", lang);
+            assert!(
+                !tr.inject_env_exfiltration.is_empty(),
+                "{:?}: inject_env_exfiltration",
+                lang
+            );
+            assert!(
+                !tr.inject_base64_shell.is_empty(),
+                "{:?}: inject_base64_shell",
+                lang
+            );
+            assert!(
+                !tr.inject_reverse_shell.is_empty(),
+                "{:?}: inject_reverse_shell",
+                lang
+            );
+            assert!(
+                !tr.inject_eval_remote.is_empty(),
+                "{:?}: inject_eval_remote",
+                lang
+            );
+            assert!(
+                !tr.inject_source_remote.is_empty(),
+                "{:?}: inject_source_remote",
+                lang
+            );
+            assert!(
+                !tr.inject_overwrite_config.is_empty(),
+                "{:?}: inject_overwrite_config",
+                lang
+            );
+            assert!(
+                !tr.inject_crontab_modify.is_empty(),
+                "{:?}: inject_crontab_modify",
+                lang
+            );
+            assert!(
+                !tr.inject_download_execute.is_empty(),
+                "{:?}: inject_download_execute",
+                lang
+            );
+            assert!(
+                !tr.inject_config_file_attack.is_empty(),
+                "{:?}: inject_config_file_attack",
+                lang
+            );
         }
     }
 }

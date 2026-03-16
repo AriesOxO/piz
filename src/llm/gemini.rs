@@ -74,7 +74,11 @@ impl GeminiBackend {
 
             if super::should_retry(status) && attempt + 1 < super::MAX_RETRIES {
                 super::backoff_delay(attempt).await;
-                last_err = Some(format!("Gemini API error ({}): {}", status, text.chars().take(500).collect::<String>()));
+                last_err = Some(format!(
+                    "Gemini API error ({}): {}",
+                    status,
+                    text.chars().take(500).collect::<String>()
+                ));
                 continue;
             }
 
@@ -82,7 +86,10 @@ impl GeminiBackend {
             anyhow::bail!("Gemini API error ({}): {}", status, preview);
         }
 
-        anyhow::bail!("{}", last_err.unwrap_or_else(|| "Gemini request failed".into()))
+        anyhow::bail!(
+            "{}",
+            last_err.unwrap_or_else(|| "Gemini request failed".into())
+        )
     }
 }
 
