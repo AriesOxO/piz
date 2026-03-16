@@ -49,9 +49,9 @@ fn compiled_danger_patterns() -> &'static CompiledPatterns {
             r"rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+/",
             r"rm\s+-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*\s+/",
             r"rm\s+-[a-zA-Z]*r[a-zA-Z]*\s+/[a-zA-Z]", // rm -r /home, rm -rf /etc
-            r"rm\s+-[a-zA-Z]*r[a-zA-Z]*\s+~/",          // rm -rf ~/
-            r"rm\s+-[a-zA-Z]*r[a-zA-Z]*\s+/\*",         // rm -rf /*
-            r"rm\s+-[a-zA-Z]*r[a-zA-Z]*\s+\$HOME",      // rm -rf $HOME
+            r"rm\s+-[a-zA-Z]*r[a-zA-Z]*\s+~/",        // rm -rf ~/
+            r"rm\s+-[a-zA-Z]*r[a-zA-Z]*\s+/\*",       // rm -rf /*
+            r"rm\s+-[a-zA-Z]*r[a-zA-Z]*\s+\$HOME",    // rm -rf $HOME
             r"mkfs\b",
             r"dd\s+.*of=/dev/",
             r":\(\)\s*\{\s*:\|:\s*&\s*\}\s*;", // fork bomb
@@ -60,9 +60,9 @@ fn compiled_danger_patterns() -> &'static CompiledPatterns {
             r"chmod\s+-R\s+777\s+~/",
             r"chown\s+-R\s+.*\s+/\s*$",
             r"DROP\s+(TABLE|DATABASE)",
-            r"DELETE\s+FROM\s+\S+\s*;?\s*$", // DELETE without WHERE
-            r"FORMAT\s+[A-Z]:",              // Windows format
-            r"rd\s+/[sq]\s+/[sq]\s+[A-Z]:\\", // Windows recursive delete (either order)
+            r"DELETE\s+FROM\s+\S+\s*;?\s*$",   // DELETE without WHERE
+            r"FORMAT\s+[A-Z]:",                // Windows format
+            r"rd\s+/[sq]\s+/[sq]\s+[A-Z]:\\",  // Windows recursive delete (either order)
             r">\s*~/?\.(ssh/authorized_keys)", // overwrite SSH keys
         ];
 
@@ -125,83 +125,92 @@ pub fn detect_danger_regex(command: &str) -> DangerLevel {
     DangerLevel::Safe
 }
 
+/// Injection reason categories
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum InjectionReason {
+    EnvExfiltration,
+    Base64Shell,
+    ReverseShell,
+    EvalRemote,
+    SourceRemote,
+    OverwriteConfig,
+    CrontabModify,
+    DownloadExecute,
+    ConfigFileAttack,
+}
+
+impl InjectionReason {
+    pub fn message(&self, tr: &crate::i18n::T) -> &'static str {
+        match self {
+            InjectionReason::EnvExfiltration => tr.inject_env_exfiltration,
+            InjectionReason::Base64Shell => tr.inject_base64_shell,
+            InjectionReason::ReverseShell => tr.inject_reverse_shell,
+            InjectionReason::EvalRemote => tr.inject_eval_remote,
+            InjectionReason::SourceRemote => tr.inject_source_remote,
+            InjectionReason::OverwriteConfig => tr.inject_overwrite_config,
+            InjectionReason::CrontabModify => tr.inject_crontab_modify,
+            InjectionReason::DownloadExecute => tr.inject_download_execute,
+            InjectionReason::ConfigFileAttack => tr.inject_config_file_attack,
+        }
+    }
+}
+
 /// Compiled injection patterns, cached via OnceLock
 struct CompiledInjectionPatterns {
-    patterns: Vec<(Regex, &'static str)>,
+    patterns: Vec<(Regex, InjectionReason)>,
 }
 
 fn compiled_injection_patterns() -> &'static CompiledInjectionPatterns {
     static PATTERNS: OnceLock<CompiledInjectionPatterns> = OnceLock::new();
     PATTERNS.get_or_init(|| {
-        let suspicious: &[(&str, &str)] = &[
-            // Data exfiltration: sending env/files to remote
+        let suspicious: &[(&str, InjectionReason)] = &[
             (
                 r#"(curl|wget|nc)\s+.*\$\{?\w*(KEY|TOKEN|SECRET|PASS|CRED)"#,
-                "Suspicious: command may exfiltrate sensitive environment variables",
+                InjectionReason::EnvExfiltration,
             ),
-            // Exfiltration via variable rename
             (
                 r#"\w+=\$\{?\w*(KEY|TOKEN|SECRET|PASS|CRED).*;\s*(curl|wget|nc)\b"#,
-                "Suspicious: variable assigned from secret then sent to network",
+                InjectionReason::EnvExfiltration,
             ),
-            // Encoded/obfuscated payloads (various forms)
             (
                 r#"(echo|printf)\s+.*\|\s*base64\s+-d\s*\|\s*(sh|bash|exec)"#,
-                "Suspicious: base64-encoded payload piped to shell",
+                InjectionReason::Base64Shell,
             ),
             (
                 r#"base64\s+-d.*\|\s*(sh|bash)"#,
-                "Suspicious: base64-decoded content piped to shell",
+                InjectionReason::Base64Shell,
             ),
             (
                 r#"\\x[0-9a-fA-F]{2}.*\\x[0-9a-fA-F]{2}.*\|\s*(sh|bash)"#,
-                "Suspicious: hex-encoded payload piped to shell",
+                InjectionReason::Base64Shell,
             ),
-            // Python/perl/ruby reverse shells
             (
                 r#"(python[23]?|perl|ruby|php)\s+.*-[ce]\s+.*(socket|connect|exec|pty\.spawn)"#,
-                "Suspicious: possible reverse shell attempt",
+                InjectionReason::ReverseShell,
             ),
-            // Eval/exec with remote content (various forms)
             (
                 r#"eval\s+.*\$\((curl|wget)"#,
-                "Suspicious: eval with remote content",
+                InjectionReason::EvalRemote,
             ),
-            // source <(curl ...) or bash <(curl ...)
             (
                 r#"(source|\.|\bbash\b)\s+<\(\s*(curl|wget)"#,
-                "Suspicious: sourcing remote content via process substitution",
+                InjectionReason::SourceRemote,
             ),
-            // /dev/tcp reverse shell
-            (
-                r#"/dev/tcp/"#,
-                "Suspicious: possible reverse shell via /dev/tcp",
-            ),
-            // nc -e reverse shell
+            (r#"/dev/tcp/"#, InjectionReason::ReverseShell),
             (
                 r#"nc\s+.*-e\s+/bin/(sh|bash)"#,
-                "Suspicious: netcat reverse shell attempt",
+                InjectionReason::ReverseShell,
             ),
-            // Overwriting shell config files
             (
                 r#">\s*~/?\.(bashrc|zshrc|profile|bash_profile)"#,
-                "Suspicious: overwriting shell configuration",
+                InjectionReason::OverwriteConfig,
             ),
-            // Adding to crontab silently
-            (
-                r#"\|\s*crontab\s+-"#,
-                "Suspicious: modifying crontab via pipe",
-            ),
-            // Download + chmod +x + execute chain
+            (r#"\|\s*crontab\s+-"#, InjectionReason::CrontabModify),
             (
                 r#"(curl|wget)\s+.*&&\s*chmod\s+\+x\s+.*&&"#,
-                "Suspicious: download-execute chain detected",
+                InjectionReason::DownloadExecute,
             ),
-            // curl -K config file attack
-            (
-                r#"curl\s+.*-K"#,
-                "Suspicious: curl with config file may read sensitive data",
-            ),
+            (r#"curl\s+.*-K"#, InjectionReason::ConfigFileAttack),
         ];
 
         let patterns = suspicious
@@ -219,11 +228,11 @@ fn compiled_injection_patterns() -> &'static CompiledInjectionPatterns {
 
 /// Detect suspicious patterns that suggest prompt injection or data exfiltration.
 /// Returns Some(reason) if the command looks malicious.
-pub fn detect_injection(command: &str) -> Option<&'static str> {
+pub fn detect_injection(command: &str) -> Option<InjectionReason> {
     let compiled = compiled_injection_patterns();
     for (re, reason) in &compiled.patterns {
         if re.is_match(command) {
-            return Some(reason);
+            return Some(*reason);
         }
     }
     None
@@ -256,9 +265,18 @@ mod tests {
 
     #[test]
     fn as_str_roundtrip() {
-        assert_eq!(DangerLevel::from_str_level(DangerLevel::Safe.as_str()), DangerLevel::Safe);
-        assert_eq!(DangerLevel::from_str_level(DangerLevel::Warning.as_str()), DangerLevel::Warning);
-        assert_eq!(DangerLevel::from_str_level(DangerLevel::Dangerous.as_str()), DangerLevel::Dangerous);
+        assert_eq!(
+            DangerLevel::from_str_level(DangerLevel::Safe.as_str()),
+            DangerLevel::Safe
+        );
+        assert_eq!(
+            DangerLevel::from_str_level(DangerLevel::Warning.as_str()),
+            DangerLevel::Warning
+        );
+        assert_eq!(
+            DangerLevel::from_str_level(DangerLevel::Dangerous.as_str()),
+            DangerLevel::Dangerous
+        );
     }
 
     #[test]

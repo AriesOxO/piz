@@ -157,9 +157,9 @@ async fn run() -> Result<()> {
             // Re-validate injection detection on cached commands
             if let Some(reason) = danger::detect_injection(&cached_cmd) {
                 ui::print_danger(tr);
-                ui::print_info(reason);
+                ui::print_info(reason.message(tr));
                 let _ = c.delete(&query, &ctx.os, &ctx.shell);
-                anyhow::bail!("Cached command blocked: {}", reason);
+                anyhow::bail!("Cached command blocked: {}", reason.message(tr));
             }
 
             ui::print_cached(tr);
@@ -214,8 +214,8 @@ async fn run() -> Result<()> {
     // Injection detection
     if let Some(reason) = danger::detect_injection(&command) {
         ui::print_danger(tr);
-        ui::print_info(reason);
-        anyhow::bail!("Command blocked: {}", reason);
+        ui::print_info(reason.message(tr));
+        anyhow::bail!("Command blocked: {}", reason.message(tr));
     }
 
     // Danger detection: regex + LLM
@@ -255,8 +255,8 @@ async fn handle_command_with_autofix(
             // Re-check edited command for injection and danger
             if let Some(reason) = danger::detect_injection(edited) {
                 ui::print_danger(tr);
-                ui::print_info(reason);
-                anyhow::bail!("Edited command blocked: {}", reason);
+                ui::print_info(reason.message(tr));
+                anyhow::bail!("Edited command blocked: {}", reason.message(tr));
             }
             Some(executor::execute_command(edited, tr)?)
         }
@@ -331,7 +331,7 @@ async fn try_auto_fix(
 
         // Injection check on fix
         if let Some(reason) = danger::detect_injection(&fixed_cmd) {
-            ui::print_error(&format!("{} {}", tr.auto_fix_failed, reason));
+            ui::print_error(&format!("{} {}", tr.auto_fix_failed, reason.message(tr)));
             return Ok(());
         }
 
@@ -363,7 +363,7 @@ async fn try_auto_fix(
             UserChoice::Edit(edited) => {
                 // Re-check edited command for injection
                 if let Some(reason) = danger::detect_injection(&edited) {
-                    ui::print_error(&format!("{} {}", tr.auto_fix_failed, reason));
+                    ui::print_error(&format!("{} {}", tr.auto_fix_failed, reason.message(tr)));
                     return Ok(());
                 }
                 let (code, _out, err) = executor::execute_command(&edited, tr)?;
@@ -421,7 +421,7 @@ pub fn handle_command_in_chat(
             // Re-check edited command for injection
             if let Some(reason) = danger::detect_injection(&edited) {
                 ui::print_danger(tr);
-                ui::print_info(reason);
+                ui::print_info(reason.message(tr));
                 return;
             }
             if let Err(e) = executor::execute_command(&edited, tr) {

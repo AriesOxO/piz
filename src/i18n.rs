@@ -85,6 +85,17 @@ pub struct T {
     pub chat_title: &'static str,
     pub chat_hint: &'static str,
     pub bye: &'static str,
+
+    // ── injection detection ──
+    pub inject_env_exfiltration: &'static str,
+    pub inject_base64_shell: &'static str,
+    pub inject_reverse_shell: &'static str,
+    pub inject_eval_remote: &'static str,
+    pub inject_source_remote: &'static str,
+    pub inject_overwrite_config: &'static str,
+    pub inject_crontab_modify: &'static str,
+    pub inject_download_execute: &'static str,
+    pub inject_config_file_attack: &'static str,
 }
 
 pub fn t(lang: Lang) -> &'static T {
@@ -149,6 +160,16 @@ static ZH: T = T {
     chat_title: "交互模式",
     chat_hint: "输入你的请求，或 'exit'/'quit' 退出。",
     bye: "再见！",
+
+    inject_env_exfiltration: "可疑：命令可能泄露敏感环境变量",
+    inject_base64_shell: "可疑：Base64 编码内容被管道传送到 Shell",
+    inject_reverse_shell: "可疑：可能的反向 Shell 攻击",
+    inject_eval_remote: "可疑：eval 执行远程内容",
+    inject_source_remote: "可疑：通过进程替换加载远程内容",
+    inject_overwrite_config: "可疑：覆写 Shell 配置文件",
+    inject_crontab_modify: "可疑：通过管道修改 crontab",
+    inject_download_execute: "可疑：下载-执行链检测到",
+    inject_config_file_attack: "可疑：curl 使用配置文件可能读取敏感数据",
 };
 
 static EN: T = T {
@@ -205,6 +226,16 @@ static EN: T = T {
     chat_title: "interactive mode",
     chat_hint: "Type your request, or 'exit'/'quit' to leave.",
     bye: "Bye!",
+
+    inject_env_exfiltration: "Suspicious: command may exfiltrate sensitive environment variables",
+    inject_base64_shell: "Suspicious: base64-encoded payload piped to shell",
+    inject_reverse_shell: "Suspicious: possible reverse shell attempt",
+    inject_eval_remote: "Suspicious: eval with remote content",
+    inject_source_remote: "Suspicious: sourcing remote content via process substitution",
+    inject_overwrite_config: "Suspicious: overwriting shell configuration",
+    inject_crontab_modify: "Suspicious: modifying crontab via pipe",
+    inject_download_execute: "Suspicious: download-execute chain detected",
+    inject_config_file_attack: "Suspicious: curl with config file may read sensitive data",
 };
 
 static JA: T = T {
@@ -261,6 +292,16 @@ static JA: T = T {
     chat_title: "インタラクティブモード",
     chat_hint: "リクエストを入力するか、'exit'/'quit' で終了します。",
     bye: "さようなら！",
+
+    inject_env_exfiltration: "疑わしい：機密環境変数が漏洩する可能性があります",
+    inject_base64_shell: "疑わしい：Base64エンコードされたペイロードがシェルにパイプされています",
+    inject_reverse_shell: "疑わしい：リバースシェルの可能性があります",
+    inject_eval_remote: "疑わしい：リモートコンテンツのeval実行",
+    inject_source_remote: "疑わしい：プロセス置換によるリモートコンテンツの読み込み",
+    inject_overwrite_config: "疑わしい：シェル設定ファイルの上書き",
+    inject_crontab_modify: "疑わしい：パイプによるcrontabの変更",
+    inject_download_execute: "疑わしい：ダウンロード-実行チェーンが検出されました",
+    inject_config_file_attack: "疑わしい：curlの設定ファイルが機密データを読み取る可能性があります",
 };
 
 #[cfg(test)]
@@ -289,14 +330,22 @@ mod tests {
         for lang in [Lang::Zh, Lang::En, Lang::Ja] {
             let tr = t(lang);
             assert!(!tr.cached.is_empty(), "{:?}: cached", lang);
-            assert!(!tr.command_explanation.is_empty(), "{:?}: command_explanation", lang);
+            assert!(
+                !tr.command_explanation.is_empty(),
+                "{:?}: command_explanation",
+                lang
+            );
             assert!(!tr.diagnosis.is_empty(), "{:?}: diagnosis", lang);
             assert!(!tr.cancelled.is_empty(), "{:?}: cancelled", lang);
             assert!(!tr.thinking.is_empty(), "{:?}: thinking", lang);
             assert!(!tr.analyzing.is_empty(), "{:?}: analyzing", lang);
             assert!(!tr.danger_warning.is_empty(), "{:?}: danger_warning", lang);
             assert!(!tr.modify_warning.is_empty(), "{:?}: modify_warning", lang);
-            assert!(!tr.confirm_dangerous.is_empty(), "{:?}: confirm_dangerous", lang);
+            assert!(
+                !tr.confirm_dangerous.is_empty(),
+                "{:?}: confirm_dangerous",
+                lang
+            );
             assert!(!tr.yes_execute.is_empty(), "{:?}: yes_execute", lang);
             assert!(!tr.no_cancel.is_empty(), "{:?}: no_cancel", lang);
             assert!(!tr.edit_command.is_empty(), "{:?}: edit_command", lang);
@@ -306,26 +355,74 @@ mod tests {
             assert!(!tr.edit_prompt.is_empty(), "{:?}: edit_prompt", lang);
             assert!(!tr.exit_code.is_empty(), "{:?}: exit_code", lang);
             assert!(!tr.no_piz_record.is_empty(), "{:?}: no_piz_record", lang);
-            assert!(!tr.last_from_history.is_empty(), "{:?}: last_from_history", lang);
+            assert!(
+                !tr.last_from_history.is_empty(),
+                "{:?}: last_from_history",
+                lang
+            );
             assert!(!tr.last_succeeded.is_empty(), "{:?}: last_succeeded", lang);
             assert!(!tr.failed_command.is_empty(), "{:?}: failed_command", lang);
-            assert!(!tr.auto_fix_prompt.is_empty(), "{:?}: auto_fix_prompt", lang);
-            assert!(!tr.auto_fix_attempting.is_empty(), "{:?}: auto_fix_attempting", lang);
-            assert!(!tr.auto_fix_failed.is_empty(), "{:?}: auto_fix_failed", lang);
+            assert!(
+                !tr.auto_fix_prompt.is_empty(),
+                "{:?}: auto_fix_prompt",
+                lang
+            );
+            assert!(
+                !tr.auto_fix_attempting.is_empty(),
+                "{:?}: auto_fix_attempting",
+                lang
+            );
+            assert!(
+                !tr.auto_fix_failed.is_empty(),
+                "{:?}: auto_fix_failed",
+                lang
+            );
             assert!(!tr.wizard_title.is_empty(), "{:?}: wizard_title", lang);
             assert!(!tr.select_backend.is_empty(), "{:?}: select_backend", lang);
-            assert!(!tr.auto_confirm_prompt.is_empty(), "{:?}: auto_confirm_prompt", lang);
+            assert!(
+                !tr.auto_confirm_prompt.is_empty(),
+                "{:?}: auto_confirm_prompt",
+                lang
+            );
             assert!(!tr.extra_backends.is_empty(), "{:?}: extra_backends", lang);
             assert!(!tr.config_saved.is_empty(), "{:?}: config_saved", lang);
-            assert!(!tr.config_validated.is_empty(), "{:?}: config_validated", lang);
-            assert!(!tr.config_edit_hint.is_empty(), "{:?}: config_edit_hint", lang);
-            assert!(!tr.config_rerun_hint.is_empty(), "{:?}: config_rerun_hint", lang);
-            assert!(!tr.config_overwrite.is_empty(), "{:?}: config_overwrite", lang);
+            assert!(
+                !tr.config_validated.is_empty(),
+                "{:?}: config_validated",
+                lang
+            );
+            assert!(
+                !tr.config_edit_hint.is_empty(),
+                "{:?}: config_edit_hint",
+                lang
+            );
+            assert!(
+                !tr.config_rerun_hint.is_empty(),
+                "{:?}: config_rerun_hint",
+                lang
+            );
+            assert!(
+                !tr.config_overwrite.is_empty(),
+                "{:?}: config_overwrite",
+                lang
+            );
             assert!(!tr.api_key_prompt.is_empty(), "{:?}: api_key_prompt", lang);
             assert!(!tr.model_prompt.is_empty(), "{:?}: model_prompt", lang);
-            assert!(!tr.select_provider.is_empty(), "{:?}: select_provider", lang);
-            assert!(!tr.base_url_prompt.is_empty(), "{:?}: base_url_prompt", lang);
-            assert!(!tr.custom_url_prompt.is_empty(), "{:?}: custom_url_prompt", lang);
+            assert!(
+                !tr.select_provider.is_empty(),
+                "{:?}: select_provider",
+                lang
+            );
+            assert!(
+                !tr.base_url_prompt.is_empty(),
+                "{:?}: base_url_prompt",
+                lang
+            );
+            assert!(
+                !tr.custom_url_prompt.is_empty(),
+                "{:?}: custom_url_prompt",
+                lang
+            );
             assert!(!tr.add_openai.is_empty(), "{:?}: add_openai", lang);
             assert!(!tr.add_claude.is_empty(), "{:?}: add_claude", lang);
             assert!(!tr.add_gemini.is_empty(), "{:?}: add_gemini", lang);
@@ -334,6 +431,15 @@ mod tests {
             assert!(!tr.chat_title.is_empty(), "{:?}: chat_title", lang);
             assert!(!tr.chat_hint.is_empty(), "{:?}: chat_hint", lang);
             assert!(!tr.bye.is_empty(), "{:?}: bye", lang);
+            assert!(!tr.inject_env_exfiltration.is_empty(), "{:?}: inject_env_exfiltration", lang);
+            assert!(!tr.inject_base64_shell.is_empty(), "{:?}: inject_base64_shell", lang);
+            assert!(!tr.inject_reverse_shell.is_empty(), "{:?}: inject_reverse_shell", lang);
+            assert!(!tr.inject_eval_remote.is_empty(), "{:?}: inject_eval_remote", lang);
+            assert!(!tr.inject_source_remote.is_empty(), "{:?}: inject_source_remote", lang);
+            assert!(!tr.inject_overwrite_config.is_empty(), "{:?}: inject_overwrite_config", lang);
+            assert!(!tr.inject_crontab_modify.is_empty(), "{:?}: inject_crontab_modify", lang);
+            assert!(!tr.inject_download_execute.is_empty(), "{:?}: inject_download_execute", lang);
+            assert!(!tr.inject_config_file_attack.is_empty(), "{:?}: inject_config_file_attack", lang);
         }
     }
 }

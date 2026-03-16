@@ -94,7 +94,7 @@ pub async fn run_chat(
         // Injection check - don't add malicious responses to history
         if let Some(reason) = danger::detect_injection(&command) {
             ui::print_danger(tr);
-            ui::print_info(reason);
+            ui::print_info(reason.message(tr));
             // Remove the user message that triggered this
             history.pop();
             continue;
