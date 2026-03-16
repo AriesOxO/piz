@@ -9,15 +9,13 @@ use crate::llm::{LlmBackend, Message};
 use crate::ui;
 use crate::{handle_command_in_chat, parse_llm_response};
 
-/// Maximum number of history messages to keep (to control token usage)
-const MAX_HISTORY: usize = 20;
-
 pub async fn run_chat(
     backend: &dyn LlmBackend,
     ctx: &SystemContext,
     tr: &i18n::T,
     lang: &str,
     auto_confirm: bool,
+    max_history: usize,
 ) -> Result<()> {
     let system_prompt = build_chat_system_prompt(ctx, lang);
     let mut history: Vec<Message> = Vec::new();
@@ -53,8 +51,8 @@ pub async fn run_chat(
         });
 
         // Truncate history if too long
-        if history.len() > MAX_HISTORY {
-            let excess = history.len() - MAX_HISTORY;
+        if history.len() > max_history {
+            let excess = history.len() - max_history;
             history.drain(..excess);
         }
 

@@ -96,6 +96,7 @@ mod tests {
             cache_ttl_hours: 168,
             auto_confirm_safe: false,
             language: "zh".into(),
+            chat_history_size: 20,
             openai: Some(OpenAiConfig {
                 api_key: "sk-test".into(),
                 model: "gpt-4o-mini".into(),
@@ -141,6 +142,7 @@ mod tests {
             cache_ttl_hours: 168,
             auto_confirm_safe: false,
             language: "zh".into(),
+            chat_history_size: 20,
             openai: None,
             claude: None,
             gemini: None,

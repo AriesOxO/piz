@@ -73,6 +73,7 @@ async fn run() -> Result<()> {
                     tr,
                     lang.code(),
                     cfg.auto_confirm_safe,
+                    cfg.chat_history_size,
                 )
                 .await;
             }

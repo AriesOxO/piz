@@ -14,6 +14,8 @@ pub struct Config {
     pub auto_confirm_safe: bool,
     #[serde(default = "default_language")]
     pub language: String,
+    #[serde(default = "default_chat_history_size")]
+    pub chat_history_size: usize,
     pub openai: Option<OpenAiConfig>,
     pub claude: Option<ClaudeConfig>,
     pub gemini: Option<GeminiConfig>,
@@ -66,6 +68,9 @@ fn default_openai_model() -> String {
 }
 fn default_claude_model() -> String {
     "claude-sonnet-4-20250514".into()
+}
+fn default_chat_history_size() -> usize {
+    20
 }
 fn default_gemini_model() -> String {
     "gemini-2.5-flash".into()
