@@ -109,6 +109,13 @@ async fn run() -> Result<()> {
     // Parse response (4-level fallback)
     let (command, llm_danger) = parse_llm_response(&response)?;
 
+    // Injection detection
+    if let Some(reason) = danger::detect_injection(&command) {
+        ui::print_danger(tr);
+        ui::print_info(reason);
+        anyhow::bail!("Command blocked: {}", reason);
+    }
+
     // Danger detection: regex + LLM
     let regex_danger = danger::detect_danger_regex(&command);
     let final_danger = regex_danger.max(llm_danger);
@@ -148,6 +155,22 @@ fn handle_command(
     Ok(())
 }
 
+/// Check if LLM response is a refusal (non-command input detected)
+fn check_refusal(v: &serde_json::Value) -> Option<String> {
+    if v["refuse"].as_bool() == Some(true) {
+        let msg = v["message"].as_str().unwrap_or("Not a command request.");
+        return Some(msg.to_string());
+    }
+    // Also refuse if command is empty
+    if let Some(cmd) = v["command"].as_str() {
+        if cmd.trim().is_empty() {
+            let msg = v["message"].as_str().unwrap_or("No command generated.");
+            return Some(msg.to_string());
+        }
+    }
+    None
+}
+
 /// Parse LLM response with 4-level fallback:
 /// 1. Direct JSON
 /// 2. Extract JSON block from text
@@ -158,6 +181,9 @@ pub fn parse_llm_response(response: &str) -> Result<(String, DangerLevel)> {
 
     // Level 1: Direct JSON parse
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        if let Some(refused) = check_refusal(&v) {
+            anyhow::bail!("{}", refused);
+        }
         if let Some(cmd) = v["command"].as_str() {
             let danger = v["danger"]
                 .as_str()
@@ -172,6 +198,9 @@ pub fn parse_llm_response(response: &str) -> Result<(String, DangerLevel)> {
         if let Some(end) = trimmed.rfind('}') {
             let json_str = &trimmed[start..=end];
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(json_str) {
+                if let Some(refused) = check_refusal(&v) {
+                    anyhow::bail!("{}", refused);
+                }
                 if let Some(cmd) = v["command"].as_str() {
                     let danger = v["danger"]
                         .as_str()
@@ -336,5 +365,37 @@ mod tests {
         let (cmd, _) = parse_llm_response(input).unwrap();
         assert!(cmd.contains("ps aux"));
         assert!(cmd.contains("grep nginx"));
+    }
+
+    // ── Refusal detection ──
+
+    #[test]
+    fn parse_refusal_refuse_true() {
+        let input =
+            r#"{"command": "", "danger": "safe", "refuse": true, "message": "Not a command."}"#;
+        let result = parse_llm_response(input);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().to_string().contains("Not a command"));
+    }
+
+    #[test]
+    fn parse_refusal_empty_command() {
+        let input = r#"{"command": "", "danger": "safe"}"#;
+        let result = parse_llm_response(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_refusal_embedded_in_text() {
+        let input = r#"Sorry: {"command": "", "refuse": true, "message": "Greeting detected."}"#;
+        let result = parse_llm_response(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_normal_command_not_refused() {
+        let input = r#"{"command": "ls -la", "danger": "safe", "refuse": false}"#;
+        let result = parse_llm_response(input);
+        assert!(result.is_ok());
     }
 }
