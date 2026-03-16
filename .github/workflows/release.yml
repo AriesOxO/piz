@@ -17,13 +17,12 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-22.04
             archive: tar.gz
             deb: true
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-22.04-arm
             archive: tar.gz
-            use-cross: true
           - target: x86_64-apple-darwin
             os: macos-latest
             archive: tar.gz
@@ -42,18 +41,8 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
 
-      # ── Install cross for ARM64 Linux ──
-      - name: Install cross
-        if: matrix.use-cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-
       # ── Build ──
-      - name: Build (cross)
-        if: matrix.use-cross
-        run: cross build --release --target ${{ matrix.target }}
-
-      - name: Build (cargo)
-        if: ${{ !matrix.use-cross }}
+      - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
       # ── Package: tar.gz (Unix) ──
