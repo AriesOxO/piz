@@ -10,7 +10,9 @@ fn shell_hints(shell: &str) -> &'static str {
 - Use $env:VAR for environment variables, not $VAR
 - Use ` (backtick) for line continuation, not \
 - Use ; to chain commands, not &&
-- Paths use \ but / also works"#
+- Paths use \ but / also works
+- IMPORTANT: Prefer aliases that also work in cmd (cd, dir, cls, type) over PowerShell-only cmdlets (Set-Location, Get-ChildItem) when both achieve the same result
+- IMPORTANT: When changing to a drive root (e.g. D:), always use "cd D:\" with trailing backslash, because "Set-Location D:" goes to the LAST visited path on that drive, not the root"#
         }
 
         "cmd" => {
@@ -19,7 +21,8 @@ fn shell_hints(shell: &str) -> &'static str {
 - Use %VAR% for environment variables
 - Use ^ for line continuation
 - Use & or && to chain commands
-- Paths must use \"#
+- Paths must use \
+- When changing to a different drive, use "cd /d D:\" (the /d flag is required to switch drives)"#
         }
 
         "zsh" => {
