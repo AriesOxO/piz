@@ -61,7 +61,11 @@ impl LlmBackend for OllamaBackend {
                 {"role": "system", "content": system},
                 {"role": "user", "content": user}
             ],
-            "stream": false
+            "stream": false,
+            "options": {
+                "temperature": super::DEFAULT_TEMPERATURE,
+                "num_predict": super::DEFAULT_MAX_TOKENS
+            }
         });
         self.send_request(body).await
     }
@@ -74,7 +78,11 @@ impl LlmBackend for OllamaBackend {
         let body = json!({
             "model": self.config.model,
             "messages": msgs,
-            "stream": false
+            "stream": false,
+            "options": {
+                "temperature": super::DEFAULT_TEMPERATURE,
+                "num_predict": super::DEFAULT_MAX_TOKENS
+            }
         });
         self.send_request(body).await
     }

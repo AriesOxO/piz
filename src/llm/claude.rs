@@ -65,7 +65,8 @@ impl LlmBackend for ClaudeBackend {
     async fn chat(&self, system: &str, user: &str) -> Result<String> {
         let body = json!({
             "model": self.config.model,
-            "max_tokens": 2048,
+            "max_tokens": super::DEFAULT_MAX_TOKENS,
+            "temperature": super::DEFAULT_TEMPERATURE,
             "system": system,
             "messages": [
                 {"role": "user", "content": user}
@@ -81,7 +82,8 @@ impl LlmBackend for ClaudeBackend {
             .collect();
         let body = json!({
             "model": self.config.model,
-            "max_tokens": 2048,
+            "max_tokens": super::DEFAULT_MAX_TOKENS,
+            "temperature": super::DEFAULT_TEMPERATURE,
             "system": system,
             "messages": msgs
         });

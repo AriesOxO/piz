@@ -12,6 +12,12 @@ use std::time::Duration;
 /// Default HTTP request timeout for LLM API calls
 const DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// Default temperature for all LLM backends
+pub(crate) const DEFAULT_TEMPERATURE: f64 = 0.1;
+
+/// Default max tokens for all LLM backends
+pub(crate) const DEFAULT_MAX_TOKENS: u32 = 2048;
+
 /// A message in a conversation
 #[derive(Debug, Clone)]
 pub struct Message {
