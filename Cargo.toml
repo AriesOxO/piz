@@ -1,6 +1,6 @@
 [package]
 name = "piz"
-version = "0.2.0"
+version = "0.0.1-beta"
 edition = "2021"
 description = "Intelligent terminal command assistant - translate natural language to shell commands"
 license = "MIT"
