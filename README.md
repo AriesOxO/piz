@@ -253,6 +253,56 @@ piz --eval list files                 # Eval mode (for shell integration)
 piz --version                      # Show version
 ```
 
+## Update
+
+### Self-update
+
+```bash
+piz update                  # Interactive: check latest version and upgrade
+```
+
+`piz update` checks GitHub Releases for the latest version. If a new version is available, you can choose between two upgrade methods:
+
+1. **Overwrite install** — replace the current binary in-place
+2. **Uninstall then reinstall** — remove old version first, then install new
+
+Both methods include automatic rollback on failure.
+
+### Automatic update check
+
+piz checks for updates **automatically in the background** after each run (at most once every 24 hours, with a 5-second timeout so it never blocks). When a newer version is detected, a hint is shown:
+
+```
+ℹ piz 0.3.0 is available (current: 0.2.5). Run `piz update` to upgrade.
+```
+
+No manual configuration is needed — this works out of the box. The check state is stored in `~/.piz/update_state.json`.
+
+### Manual install (specific version)
+
+If you want to install a specific version, download the binary directly from [GitHub Releases](https://github.com/AriesOxO/piz/releases):
+
+```bash
+# Linux/macOS — replace VERSION and TARGET as needed
+curl -fsSL https://github.com/AriesOxO/piz/releases/download/vVERSION/piz-TARGET.tar.gz | tar xz
+sudo mv piz /usr/local/bin/
+
+# Windows (PowerShell)
+Invoke-WebRequest -Uri "https://github.com/AriesOxO/piz/releases/download/vVERSION/piz-x86_64-pc-windows-msvc.zip" -OutFile piz.zip
+Expand-Archive piz.zip -DestinationPath .
+Move-Item piz.exe "$env:LOCALAPPDATA\piz\piz.exe"
+```
+
+Or reinstall via the install script:
+
+```bash
+# Linux/macOS
+curl -fsSL https://raw.githubusercontent.com/AriesOxO/piz/main/install.sh | bash
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/AriesOxO/piz/main/install.ps1 | iex
+```
+
 ## Supported Providers
 
 ### Native backends

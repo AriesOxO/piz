@@ -255,6 +255,56 @@ piz --eval 列出文件               # Eval 模式（用于 Shell 集成）
 piz --version                     # 查看版本
 ```
 
+## 更新
+
+### 自更新
+
+```bash
+piz update                  # 交互式：检查最新版本并升级
+```
+
+`piz update` 检查 GitHub Releases 获取最新版本。如果有新版本，可选择两种升级方式：
+
+1. **覆盖安装** — 直接替换当前二进制文件
+2. **卸载后重装** — 先删除旧版本，再安装新版本
+
+两种方式均支持失败自动回滚。
+
+### 自动更新检查
+
+piz 在每次运行后**自动在后台检查更新**（每 24 小时最多一次，5 秒超时，绝不会阻塞）。检测到新版本时会显示提示：
+
+```
+ℹ piz 0.3.0 is available (current: 0.2.5). Run `piz update` to upgrade.
+```
+
+无需任何配置即可使用。检查状态存储在 `~/.piz/update_state.json`。
+
+### 手动安装（指定版本）
+
+如需安装特定版本，可直接从 [GitHub Releases](https://github.com/AriesOxO/piz/releases) 下载：
+
+```bash
+# Linux/macOS — 替换 VERSION 和 TARGET
+curl -fsSL https://github.com/AriesOxO/piz/releases/download/vVERSION/piz-TARGET.tar.gz | tar xz
+sudo mv piz /usr/local/bin/
+
+# Windows (PowerShell)
+Invoke-WebRequest -Uri "https://github.com/AriesOxO/piz/releases/download/vVERSION/piz-x86_64-pc-windows-msvc.zip" -OutFile piz.zip
+Expand-Archive piz.zip -DestinationPath .
+Move-Item piz.exe "$env:LOCALAPPDATA\piz\piz.exe"
+```
+
+或通过安装脚本重新安装：
+
+```bash
+# Linux/macOS
+curl -fsSL https://raw.githubusercontent.com/AriesOxO/piz/main/install.sh | bash
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/AriesOxO/piz/main/install.ps1 | iex
+```
+
 ## 支持的供应商
 
 ### 原生后端
