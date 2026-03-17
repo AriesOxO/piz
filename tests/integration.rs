@@ -79,7 +79,7 @@ fn parse_zsh_history_format() {
         .unwrap();
 
     let cmd = if last_line.starts_with(':') {
-        last_line.splitn(2, ';').nth(1).unwrap_or(last_line)
+        last_line.split_once(';').map_or(last_line, |x| x.1)
     } else {
         last_line
     };
@@ -140,6 +140,73 @@ fn binary_help_output() {
     assert!(stdout.contains("--explain"));
     assert!(stdout.contains("--backend"));
     assert!(stdout.contains("--no-cache"));
+}
+
+#[test]
+fn config_command_masks_secrets_by_default_and_show() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let dir = tempfile::tempdir().unwrap();
+    let piz_dir = dir.path().join(".piz");
+    std::fs::create_dir_all(&piz_dir).unwrap();
+    let config_path = piz_dir.join("config.toml");
+    let content = r#"default_backend = "openai"
+cache_ttl_hours = 168
+
+[openai]
+api_key = "sk-test-secret-1234"
+"#;
+    let mut f = std::fs::File::create(&config_path).unwrap();
+    f.write_all(content.as_bytes()).unwrap();
+
+    let output = std::process::Command::new(exe)
+        .arg("config")
+        .env("HOME", dir.path())
+        .env("USERPROFILE", dir.path())
+        .output()
+        .expect("failed to run piz config");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success());
+    assert!(stdout.contains("Config path:"));
+    assert!(stdout.contains("sk-t...1234"));
+    assert!(!stdout.contains("sk-test-secret-1234"));
+
+    let output = std::process::Command::new(exe)
+        .args(["config", "--show"])
+        .env("HOME", dir.path())
+        .env("USERPROFILE", dir.path())
+        .output()
+        .expect("failed to run piz config --show");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success());
+    assert!(stdout.contains("sk-t...1234"));
+    assert!(!stdout.contains("sk-test-secret-1234"));
+}
+
+#[test]
+fn config_command_raw_shows_unmasked_secrets() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let dir = tempfile::tempdir().unwrap();
+    let piz_dir = dir.path().join(".piz");
+    std::fs::create_dir_all(&piz_dir).unwrap();
+    let config_path = piz_dir.join("config.toml");
+    let content = r#"default_backend = "openai"
+cache_ttl_hours = 168
+
+[openai]
+api_key = "sk-test-secret-1234"
+"#;
+    let mut f = std::fs::File::create(&config_path).unwrap();
+    f.write_all(content.as_bytes()).unwrap();
+
+    let output = std::process::Command::new(exe)
+        .args(["config", "--raw"])
+        .env("HOME", dir.path())
+        .env("USERPROFILE", dir.path())
+        .output()
+        .expect("failed to run piz config --raw");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success());
+    assert!(stdout.contains("sk-test-secret-1234"));
 }
 
 /// Test config --init subcommand (with temp HOME)
