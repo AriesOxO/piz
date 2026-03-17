@@ -40,10 +40,7 @@ impl OpenAiBackend {
 
     fn should_omit_temperature_by_default(&self) -> bool {
         let model = self.config.model.trim().to_ascii_lowercase();
-        model.starts_with("kimi")
-            || model.starts_with("moonshot")
-            || model.contains("/kimi")
-            || model.contains("/moonshot")
+        model.contains("kimi-k2.5")
     }
 
     fn build_body(
@@ -221,9 +218,15 @@ mod tests {
     }
 
     #[test]
-    fn kimi_model_omits_temperature_by_default() {
-        let b = backend(Some("https://api.moonshot.cn"), "kimi-k2-0711-preview");
+    fn kimi_k25_model_omits_temperature_by_default() {
+        let b = backend(Some("https://api.moonshot.cn"), "kimi-k2.5");
         assert!(b.should_omit_temperature_by_default());
+    }
+
+    #[test]
+    fn kimi_k2_model_keeps_temperature_by_default() {
+        let b = backend(Some("https://api.moonshot.cn"), "kimi-k2-0711-preview");
+        assert!(!b.should_omit_temperature_by_default());
     }
 
     #[test]
