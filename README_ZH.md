@@ -44,7 +44,7 @@ $ piz 查看磁盘使用情况
 - **多候选命令** — `-n` 参数生成多个命令方案，自主选择最优方案
 - **本地缓存** — SQLite 缓存 + TTL 过期 + LRU 淘汰 + 最大条目数限制，重复查询秒返回
 - **执行历史** — `piz history` 查看和搜索所有执行过的命令
-- **Shell 集成** — `piz init <shell>` 生成 Shell 包装函数，使 `cd`/`export`/`source` 在当前 Shell 中正确生效（bash、zsh、fish、PowerShell）
+- **Shell 集成** — `piz init <shell>` 生成 Shell 包装函数，使 `cd`/`export`/`source` 在当前 Shell 中正确生效（bash、zsh、fish、PowerShell），内置便捷别名（`p`、`pf`、`pc`）
 - **Eval 模式** — `--eval` 将确认后的命令输出给 Shell 包装函数执行
 - **Shell 补全** — 支持 bash、zsh、fish、PowerShell 自动补全
 - **管道模式** — `--pipe` 纯命令输出，便于脚本集成
@@ -57,6 +57,12 @@ $ piz 查看磁盘使用情况
 ## 快速开始
 
 ### 安装
+
+**Homebrew（macOS / Linux）：**
+
+```bash
+brew install AriesOxO/tap/piz
+```
 
 **macOS / Linux（一键安装）：**
 
@@ -229,6 +235,20 @@ Invoke-Expression (piz init powershell | Out-String)
 ```
 
 配置完成后，piz 会自动使用 `--eval` 模式，`cd`、`export`、`source` 等命令将在当前 Shell 中正确生效。
+
+Shell 集成还提供了内置便捷别名：
+
+| 别名 | 命令 | 说明 |
+|------|------|------|
+| `p` | `piz` | piz 短别名 |
+| `pf` | `piz fix` | 快速修复上一条失败命令 |
+| `pc` | `piz chat` | 快速进入对话模式 |
+
+```bash
+p 列出所有 rust 文件        # 等同于：piz 列出所有 rust 文件
+pf                          # 等同于：piz fix
+pc                          # 等同于：piz chat
+```
 
 ### 管道模式
 

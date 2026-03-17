@@ -44,7 +44,7 @@ $ piz list all files larger than 100MB
 - **Multi-Candidate** - Generate multiple command options with `-n` and pick your preferred one
 - **Local Cache** - SQLite cache with TTL + LRU eviction, max entries limit, repeated queries return instantly
 - **Execution History** - Track all executed commands with `piz history`, searchable
-- **Shell Integration** - `piz init <shell>` generates shell wrapper functions so `cd`/`export`/`source` work correctly in the current shell (bash, zsh, fish, PowerShell)
+- **Shell Integration** - `piz init <shell>` generates shell wrapper functions so `cd`/`export`/`source` work correctly in the current shell (bash, zsh, fish, PowerShell), with built-in aliases (`p`, `pf`, `pc`)
 - **Eval Mode** - `--eval` outputs confirmed command for shell wrapper to eval, used by shell integration
 - **Shell Completions** - Generate completions for bash, zsh, fish, and PowerShell
 - **Pipe Mode** - Script-friendly output with `--pipe` for integration with other tools
@@ -57,6 +57,12 @@ $ piz list all files larger than 100MB
 ## Quick Start
 
 ### Install
+
+**Homebrew (macOS / Linux):**
+
+```bash
+brew install AriesOxO/tap/piz
+```
 
 **macOS / Linux (one-liner):**
 
@@ -227,6 +233,20 @@ Invoke-Expression (piz init powershell | Out-String)
 ```
 
 Once set up, piz will use `--eval` mode automatically, and commands like `cd`, `export`, `source` will take effect in your current shell.
+
+Shell integration also provides built-in aliases for convenience:
+
+| Alias | Command | Description |
+|-------|---------|-------------|
+| `p` | `piz` | Short alias for piz |
+| `pf` | `piz fix` | Quick fix last failed command |
+| `pc` | `piz chat` | Quick enter chat mode |
+
+```bash
+p list all rust files        # Same as: piz list all rust files
+pf                           # Same as: piz fix
+pc                           # Same as: piz chat
+```
 
 ### Pipe mode
 

@@ -123,3 +123,48 @@ jobs:
             piz-*.tar.gz
             piz-*.zip
             piz-*.msi
+
+  update-homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Compute SHA256 and update formula
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          SHA_MACOS_ARM64=$(sha256sum piz-aarch64-apple-darwin.tar.gz | cut -d' ' -f1)
+          SHA_MACOS_X86=$(sha256sum piz-x86_64-apple-darwin.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_ARM64=$(sha256sum piz-aarch64-linux-musl.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_X86=$(sha256sum piz-x86_64-linux-musl.tar.gz | cut -d' ' -f1)
+
+          sed -e "s/\${VERSION}/$VERSION/g" \
+              -e "s/\${SHA256_MACOS_ARM64}/$SHA_MACOS_ARM64/g" \
+              -e "s/\${SHA256_MACOS_X86_64}/$SHA_MACOS_X86/g" \
+              -e "s/\${SHA256_LINUX_ARM64}/$SHA_LINUX_ARM64/g" \
+              -e "s/\${SHA256_LINUX_X86_64}/$SHA_LINUX_X86/g" \
+              homebrew/piz.rb > piz-formula.rb
+
+          cat piz-formula.rb
+
+      - name: Push to Homebrew tap
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          git clone https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/AriesOxO/homebrew-tap.git tap-repo
+          mkdir -p tap-repo/Formula
+          cp piz-formula.rb tap-repo/Formula/piz.rb
+          cd tap-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/piz.rb
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "piz ${{ env.VERSION }}"
+          git push

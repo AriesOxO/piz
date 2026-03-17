@@ -49,6 +49,11 @@ piz() {{
     fi
   fi
 }}
+
+# Built-in aliases for convenience
+alias p='piz'
+alias pf='piz fix'
+alias pc='piz chat'
 "#,
         eval_path = eval_path.replace('\\', "/")
     )
@@ -78,6 +83,11 @@ function piz
     end
   end
 end
+
+# Built-in aliases for convenience
+alias p='piz'
+alias pf='piz fix'
+alias pc='piz chat'
 "#,
         eval_path = eval_path.replace('\\', "/")
     )
@@ -108,6 +118,13 @@ function Invoke-Piz {{
 }}
 
 Set-Alias -Name piz -Value Invoke-Piz -Option AllScope -Force
+
+# Built-in aliases for convenience
+function Invoke-PizFix {{ & piz.exe fix @Args }}
+function Invoke-PizChat {{ & piz.exe chat @Args }}
+Set-Alias -Name p -Value Invoke-Piz -Option AllScope -Force
+Set-Alias -Name pf -Value Invoke-PizFix -Option AllScope -Force
+Set-Alias -Name pc -Value Invoke-PizChat -Option AllScope -Force
 "#,
         eval_path = eval_path.replace('/', "\\")
     )
@@ -185,5 +202,29 @@ mod tests {
         assert!(code.contains("config"));
         assert!(code.contains("chat"));
         assert!(code.contains("command piz \"$@\""));
+    }
+
+    #[test]
+    fn bash_contains_builtin_aliases() {
+        let code = generate_init("bash").unwrap();
+        assert!(code.contains("alias p='piz'"));
+        assert!(code.contains("alias pf='piz fix'"));
+        assert!(code.contains("alias pc='piz chat'"));
+    }
+
+    #[test]
+    fn fish_contains_builtin_aliases() {
+        let code = generate_init("fish").unwrap();
+        assert!(code.contains("alias p='piz'"));
+        assert!(code.contains("alias pf='piz fix'"));
+        assert!(code.contains("alias pc='piz chat'"));
+    }
+
+    #[test]
+    fn powershell_contains_builtin_aliases() {
+        let code = generate_init("powershell").unwrap();
+        assert!(code.contains("Set-Alias -Name p"));
+        assert!(code.contains("Set-Alias -Name pf"));
+        assert!(code.contains("Set-Alias -Name pc"));
     }
 }
