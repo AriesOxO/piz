@@ -92,7 +92,7 @@ pub fn piz_dir() -> Result<PathBuf> {
         .or_else(|_| std::env::var("USERPROFILE"))
         .map(PathBuf::from)
         .ok()
-        .or_else(|| dirs::home_dir())
+        .or_else(dirs::home_dir)
         .context("Cannot determine home directory")?;
     Ok(home.join(".piz"))
 }
