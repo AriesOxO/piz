@@ -62,51 +62,6 @@ fn detect_windows_version() -> String {
     "Windows".into()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn context_fields_not_empty() {
-        let ctx = collect_context();
-        assert!(!ctx.os.is_empty(), "OS should not be empty");
-        assert!(!ctx.shell.is_empty(), "shell should not be empty");
-        assert!(!ctx.cwd.is_empty(), "cwd should not be empty");
-    }
-
-    #[test]
-    fn context_arch_not_empty() {
-        let ctx = collect_context();
-        assert!(!ctx.arch.is_empty(), "arch should not be empty");
-    }
-
-    #[test]
-    fn context_git_detection() {
-        let ctx = collect_context();
-        // We're in the piz repo, so .git should exist
-        assert!(ctx.is_git_repo, "should detect git repo");
-    }
-
-    #[test]
-    fn detect_package_manager_finds_cargo() {
-        // We're in the piz repo with Cargo.toml
-        let pm = detect_package_manager();
-        assert_eq!(pm, Some("cargo".to_string()));
-    }
-
-    #[test]
-    fn context_os_is_known() {
-        let ctx = collect_context();
-        let valid = ["Windows", "Linux", "macOS"];
-        assert!(
-            valid.iter().any(|v| ctx.os.contains(v)),
-            "OS '{}' should contain one of {:?}",
-            ctx.os,
-            valid
-        );
-    }
-}
-
 fn detect_shell() -> String {
     if cfg!(target_os = "windows") {
         // Detect by checking the parent process name
@@ -200,4 +155,49 @@ pub fn detect_windows_parent_shell() -> Option<String> {
 #[cfg(not(target_os = "windows"))]
 pub fn detect_windows_parent_shell() -> Option<String> {
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn context_fields_not_empty() {
+        let ctx = collect_context();
+        assert!(!ctx.os.is_empty(), "OS should not be empty");
+        assert!(!ctx.shell.is_empty(), "shell should not be empty");
+        assert!(!ctx.cwd.is_empty(), "cwd should not be empty");
+    }
+
+    #[test]
+    fn context_arch_not_empty() {
+        let ctx = collect_context();
+        assert!(!ctx.arch.is_empty(), "arch should not be empty");
+    }
+
+    #[test]
+    fn context_git_detection() {
+        let ctx = collect_context();
+        // We're in the piz repo, so .git should exist
+        assert!(ctx.is_git_repo, "should detect git repo");
+    }
+
+    #[test]
+    fn detect_package_manager_finds_cargo() {
+        // We're in the piz repo with Cargo.toml
+        let pm = detect_package_manager();
+        assert_eq!(pm, Some("cargo".to_string()));
+    }
+
+    #[test]
+    fn context_os_is_known() {
+        let ctx = collect_context();
+        let valid = ["Windows", "Linux", "macOS"];
+        assert!(
+            valid.iter().any(|v| ctx.os.contains(v)),
+            "OS '{}' should contain one of {:?}",
+            ctx.os,
+            valid
+        );
+    }
 }

@@ -79,7 +79,7 @@ fn parse_zsh_history_format() {
         .unwrap();
 
     let cmd = if last_line.starts_with(':') {
-        last_line.splitn(2, ';').nth(1).unwrap_or(last_line)
+        last_line.split_once(';').map_or(last_line, |x| x.1)
     } else {
         last_line
     };

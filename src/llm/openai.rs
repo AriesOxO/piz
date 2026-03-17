@@ -52,12 +52,12 @@ impl OpenAiBackend {
         map.insert("model".to_string(), json!(self.config.model));
         map.insert("messages".to_string(), json!(messages));
         map.insert("max_tokens".to_string(), json!(super::DEFAULT_MAX_TOKENS));
-        map.insert("response_format".to_string(), json!({"type": "json_object"}));
+        map.insert(
+            "response_format".to_string(),
+            json!({"type": "json_object"}),
+        );
         if include_temperature {
-            map.insert(
-                "temperature".to_string(),
-                json!(super::DEFAULT_TEMPERATURE),
-            );
+            map.insert("temperature".to_string(), json!(super::DEFAULT_TEMPERATURE));
         }
         serde_json::Value::Object(map)
     }
@@ -238,18 +238,22 @@ mod tests {
     #[test]
     fn remove_top_level_field_removes_temperature() {
         let mut body = json!({"model":"x", "temperature":0.1});
-        assert!(OpenAiBackend::remove_top_level_field(&mut body, "temperature"));
+        assert!(OpenAiBackend::remove_top_level_field(
+            &mut body,
+            "temperature"
+        ));
         assert!(body.get("temperature").is_none());
     }
 
     #[test]
     fn retry_without_temperature_only_for_unsupported_temperature_errors() {
         let err = anyhow::anyhow!(
-            "OpenAI API error (400): {\"error\":\"unsupported parameter: temperature\"}"
+            "{}",
+            r#"OpenAI API error (400): {"error":"unsupported parameter: temperature"}"#
         );
         assert!(OpenAiBackend::should_retry_without_temperature(&err));
 
-        let other = anyhow::anyhow!("OpenAI API error (400): {\"error\":\"invalid model\"}");
+        let other = anyhow::anyhow!("{}", r#"OpenAI API error (400): {"error":"invalid model"}"#);
         assert!(!OpenAiBackend::should_retry_without_temperature(&other));
     }
 }
