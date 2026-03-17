@@ -286,28 +286,31 @@ fn find_platform_asset(assets: &[ReleaseAsset]) -> Result<String> {
     let arch = std::env::consts::ARCH;
 
     // Map to expected asset name patterns
-    let (os_pattern, arch_pattern, ext) = match (os, arch) {
-        ("windows", "x86_64") => ("windows", "x86_64", ".zip"),
-        ("windows", "aarch64") => ("windows", "aarch64", ".zip"),
-        ("macos", "x86_64") => ("macos", "x86_64", ".tar.gz"),
-        ("macos", "aarch64") => ("macos", "aarch64", ".tar.gz"),
-        ("linux", "x86_64") => ("linux", "x86_64", ".tar.gz"),
-        ("linux", "aarch64") => ("linux", "aarch64", ".tar.gz"),
+    let (os_patterns, arch_pattern, ext) = match (os, arch) {
+        ("windows", "x86_64") => (vec!["windows"], "x86_64", ".zip"),
+        ("windows", "aarch64") => (vec!["windows"], "aarch64", ".zip"),
+        ("macos", "x86_64") => (vec!["apple-darwin", "macos"], "x86_64", ".tar.gz"),
+        ("macos", "aarch64") => (vec!["apple-darwin", "macos"], "aarch64", ".tar.gz"),
+        ("linux", "x86_64") => (vec!["linux"], "x86_64", ".tar.gz"),
+        ("linux", "aarch64") => (vec!["linux"], "aarch64", ".tar.gz"),
         _ => anyhow::bail!("Unsupported platform: {}-{}", os, arch),
     };
 
-    // Try to find matching asset
+    // Try to find matching asset (strict: os + arch + ext)
     for asset in assets {
         let name = asset.name.to_lowercase();
-        if name.contains(os_pattern) && name.contains(arch_pattern) && name.ends_with(ext) {
+        if os_patterns.iter().any(|p| name.contains(p))
+            && name.contains(arch_pattern)
+            && name.ends_with(ext)
+        {
             return Ok(asset.browser_download_url.clone());
         }
     }
 
-    // Fallback: try less strict matching
+    // Fallback: try less strict matching (os + ext only)
     for asset in assets {
         let name = asset.name.to_lowercase();
-        if name.contains(os_pattern) && name.ends_with(ext) {
+        if os_patterns.iter().any(|p| name.contains(p)) && name.ends_with(ext) {
             return Ok(asset.browser_download_url.clone());
         }
     }
