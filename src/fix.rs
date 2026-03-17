@@ -58,7 +58,7 @@ pub async fn fix_last_command(
     let regex_danger = danger::detect_danger_regex(&fixed_cmd);
     let final_danger = regex_danger.max(llm_danger);
 
-    let choice = executor::prompt_user(&fixed_cmd, final_danger, false, tr)?;
+    let choice = executor::prompt_user(&fixed_cmd, final_danger, false, tr, None)?;
     match choice {
         UserChoice::Execute => {
             let (code, _out, stderr_out) =
@@ -133,7 +133,7 @@ pub async fn try_auto_fix(
         let regex_danger = danger::detect_danger_regex(&fixed_cmd);
         let final_danger = regex_danger.max(llm_danger);
 
-        let choice = executor::prompt_user(&fixed_cmd, final_danger, false, tr)?;
+        let choice = executor::prompt_user(&fixed_cmd, final_danger, false, tr, None)?;
         match choice {
             UserChoice::Execute => {
                 let (code, _out, err) =

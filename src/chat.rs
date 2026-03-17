@@ -5,6 +5,7 @@ use crate::config;
 use crate::context::SystemContext;
 use crate::danger;
 use crate::i18n;
+use crate::llm::prompt::augment_prompt_with_explanation;
 use crate::llm::prompt::build_chat_system_prompt;
 use crate::llm::{LlmBackend, Message};
 use crate::ui;
@@ -48,6 +49,7 @@ fn delete_chat_history() {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_chat(
     backend: &dyn LlmBackend,
     ctx: &SystemContext,
@@ -56,8 +58,10 @@ pub async fn run_chat(
     auto_confirm: bool,
     max_history: usize,
     verbose: bool,
+    detail: bool,
 ) -> Result<()> {
     let system_prompt = build_chat_system_prompt(ctx, lang);
+    let mut detail_active = detail;
     let mut history: Vec<Message> = load_chat_history();
 
     println!();
@@ -92,6 +96,15 @@ pub async fn run_chat(
                     history.clear();
                     delete_chat_history();
                     println!("  {}", tr.chat_cleared);
+                    continue;
+                }
+                "/detail" => {
+                    detail_active = !detail_active;
+                    if detail_active {
+                        println!("  {}", tr.detail_toggle_on);
+                    } else {
+                        println!("  {}", tr.detail_toggle_off);
+                    }
                     continue;
                 }
                 "/history" => {
@@ -132,8 +145,13 @@ pub async fn run_chat(
         if verbose {
             eprintln!("[verbose] chat history length: {}", history.len());
         }
+        let effective_system = if detail_active {
+            augment_prompt_with_explanation(&system_prompt, lang)
+        } else {
+            system_prompt.clone()
+        };
         let spinner = ui::create_spinner(tr.thinking);
-        let response = backend.chat_with_history(&system_prompt, &history).await;
+        let response = backend.chat_with_history(&effective_system, &history).await;
         spinner.finish_and_clear();
 
         let response = match response {
@@ -150,7 +168,7 @@ pub async fn run_chat(
         }
 
         // Parse response
-        let (command, llm_danger) = match parse_llm_response(&response) {
+        let parsed = match parse_llm_response(&response) {
             Ok(r) => r,
             Err(e) => {
                 println!("  {}", e.to_string().dimmed());
@@ -161,6 +179,9 @@ pub async fn run_chat(
                 continue;
             }
         };
+        let command = parsed.command;
+        let llm_danger = parsed.danger;
+        let explanation = parsed.explanation;
 
         // Injection check - don't add malicious responses to history
         if let Some(reason) = danger::detect_injection(&command) {
@@ -183,7 +204,19 @@ pub async fn run_chat(
         save_chat_history(&history);
 
         // Handle command
-        handle_command_in_chat(&command, final_danger, auto_confirm, tr, &ctx.shell);
+        let explanation_ref = if detail_active && !explanation.is_empty() {
+            Some(explanation.as_str())
+        } else {
+            None
+        };
+        handle_command_in_chat(
+            &command,
+            final_danger,
+            auto_confirm,
+            tr,
+            &ctx.shell,
+            explanation_ref,
+        );
     }
 
     println!();

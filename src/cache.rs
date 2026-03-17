@@ -34,6 +34,7 @@ impl Cache {
                 key TEXT PRIMARY KEY,
                 command TEXT NOT NULL,
                 danger TEXT NOT NULL,
+                explanation TEXT NOT NULL DEFAULT '',
                 created_at INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS history (
@@ -45,6 +46,16 @@ impl Cache {
                 created_at INTEGER NOT NULL
             );",
         )?;
+
+        // Migration: add explanation column to existing databases
+        let has_explanation = conn
+            .prepare("SELECT explanation FROM cache LIMIT 0")
+            .is_ok();
+        if !has_explanation {
+            conn.execute_batch(
+                "ALTER TABLE cache ADD COLUMN explanation TEXT NOT NULL DEFAULT '';",
+            )?;
+        }
 
         let cache = Self {
             conn,
@@ -69,6 +80,7 @@ impl Cache {
                 key TEXT PRIMARY KEY,
                 command TEXT NOT NULL,
                 danger TEXT NOT NULL,
+                explanation TEXT NOT NULL DEFAULT '',
                 created_at INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS history (
@@ -87,19 +99,25 @@ impl Cache {
         })
     }
 
-    pub fn get(&self, query: &str, os: &str, shell: &str) -> Result<Option<(String, String)>> {
+    pub fn get(
+        &self,
+        query: &str,
+        os: &str,
+        shell: &str,
+    ) -> Result<Option<(String, String, String)>> {
         let key = Self::make_key(query, os, shell);
         let now = now_secs();
         let ttl_secs = self.ttl_hours.saturating_mul(3600);
 
         let mut stmt = self.conn.prepare(
-            "SELECT command, danger FROM cache WHERE key = ?1 AND (created_at + ?2) > ?3",
+            "SELECT command, danger, explanation FROM cache WHERE key = ?1 AND (created_at + ?2) > ?3",
         )?;
 
         let result = stmt.query_row(rusqlite::params![key, ttl_secs, now], |row| {
             let cmd: String = row.get(0)?;
             let danger: String = row.get(1)?;
-            Ok((cmd, danger))
+            let explanation: String = row.get(2)?;
+            Ok((cmd, danger, explanation))
         });
 
         match result {
@@ -116,11 +134,12 @@ impl Cache {
         shell: &str,
         command: &str,
         danger: &str,
+        explanation: &str,
     ) -> Result<()> {
         let key = Self::make_key(query, os, shell);
         self.conn.execute(
-            "INSERT OR REPLACE INTO cache (key, command, danger, created_at) VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![key, command, danger, now_secs()],
+            "INSERT OR REPLACE INTO cache (key, command, danger, explanation, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![key, command, danger, explanation, now_secs()],
         )?;
         if self.count()? > self.max_entries {
             self.evict_lru()?;
@@ -157,6 +176,21 @@ impl Cache {
         let key = Self::make_key(query, os, shell);
         self.conn
             .execute("DELETE FROM cache WHERE key = ?1", rusqlite::params![key])?;
+        Ok(())
+    }
+
+    pub fn update_explanation(
+        &self,
+        query: &str,
+        os: &str,
+        shell: &str,
+        explanation: &str,
+    ) -> Result<()> {
+        let key = Self::make_key(query, os, shell);
+        self.conn.execute(
+            "UPDATE cache SET explanation = ?1 WHERE key = ?2",
+            rusqlite::params![explanation, key],
+        )?;
         Ok(())
     }
 
@@ -278,11 +312,14 @@ mod tests {
     fn put_and_get_roundtrip() {
         let cache = Cache::open_in_memory(168).unwrap();
         cache
-            .put("list files", "Linux", "bash", "ls -la", "safe")
+            .put("list files", "Linux", "bash", "ls -la", "safe", "")
             .unwrap();
 
         let result = cache.get("list files", "Linux", "bash").unwrap();
-        assert_eq!(result, Some(("ls -la".to_string(), "safe".to_string())));
+        assert_eq!(
+            result,
+            Some(("ls -la".to_string(), "safe".to_string(), "".to_string()))
+        );
     }
 
     #[test]
@@ -295,12 +332,14 @@ mod tests {
     #[test]
     fn put_overwrites() {
         let cache = Cache::open_in_memory(168).unwrap();
-        cache.put("q", "Linux", "bash", "old_cmd", "safe").unwrap();
         cache
-            .put("q", "Linux", "bash", "new_cmd", "warning")
+            .put("q", "Linux", "bash", "old_cmd", "safe", "")
+            .unwrap();
+        cache
+            .put("q", "Linux", "bash", "new_cmd", "warning", "")
             .unwrap();
 
-        let (cmd, danger) = cache.get("q", "Linux", "bash").unwrap().unwrap();
+        let (cmd, danger, _) = cache.get("q", "Linux", "bash").unwrap().unwrap();
         assert_eq!(cmd, "new_cmd");
         assert_eq!(danger, "warning");
     }
@@ -308,8 +347,12 @@ mod tests {
     #[test]
     fn clear_removes_all() {
         let cache = Cache::open_in_memory(168).unwrap();
-        cache.put("q1", "Linux", "bash", "cmd1", "safe").unwrap();
-        cache.put("q2", "Linux", "bash", "cmd2", "safe").unwrap();
+        cache
+            .put("q1", "Linux", "bash", "cmd1", "safe", "")
+            .unwrap();
+        cache
+            .put("q2", "Linux", "bash", "cmd2", "safe", "")
+            .unwrap();
 
         let count = cache.clear().unwrap();
         assert_eq!(count, 2);
@@ -322,7 +365,7 @@ mod tests {
     fn expired_entry_not_returned() {
         // TTL = 0 hours means everything is expired immediately
         let cache = Cache::open_in_memory(0).unwrap();
-        cache.put("q", "Linux", "bash", "ls", "safe").unwrap();
+        cache.put("q", "Linux", "bash", "ls", "safe", "").unwrap();
 
         // With TTL 0, created_at + 0 is not > now, so it should miss
         let result = cache.get("q", "Linux", "bash").unwrap();
@@ -361,7 +404,7 @@ mod tests {
     fn delete_removes_entry() {
         let cache = Cache::open_in_memory(168).unwrap();
         cache
-            .put("list files", "Linux", "bash", "ls -la", "safe")
+            .put("list files", "Linux", "bash", "ls -la", "safe", "")
             .unwrap();
         assert!(cache.get("list files", "Linux", "bash").unwrap().is_some());
         cache.delete("list files", "Linux", "bash").unwrap();
@@ -372,9 +415,13 @@ mod tests {
     fn count_returns_correct() {
         let cache = Cache::open_in_memory(168).unwrap();
         assert_eq!(cache.count().unwrap(), 0);
-        cache.put("q1", "Linux", "bash", "cmd1", "safe").unwrap();
+        cache
+            .put("q1", "Linux", "bash", "cmd1", "safe", "")
+            .unwrap();
         assert_eq!(cache.count().unwrap(), 1);
-        cache.put("q2", "Linux", "bash", "cmd2", "safe").unwrap();
+        cache
+            .put("q2", "Linux", "bash", "cmd2", "safe", "")
+            .unwrap();
         assert_eq!(cache.count().unwrap(), 2);
     }
 
@@ -389,22 +436,22 @@ mod tests {
         cache
             .conn
             .execute(
-                "INSERT INTO cache (key, command, danger, created_at) VALUES (?1, ?2, ?3, ?4)",
-                rusqlite::params![k1, "cmd1", "safe", now - 20],
+                "INSERT INTO cache (key, command, danger, explanation, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![k1, "cmd1", "safe", "", now - 20],
             )
             .unwrap();
         cache
             .conn
             .execute(
-                "INSERT INTO cache (key, command, danger, created_at) VALUES (?1, ?2, ?3, ?4)",
-                rusqlite::params![k2, "cmd2", "safe", now - 10],
+                "INSERT INTO cache (key, command, danger, explanation, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![k2, "cmd2", "safe", "", now - 10],
             )
             .unwrap();
         cache
             .conn
             .execute(
-                "INSERT INTO cache (key, command, danger, created_at) VALUES (?1, ?2, ?3, ?4)",
-                rusqlite::params![k3, "cmd3", "safe", now],
+                "INSERT INTO cache (key, command, danger, explanation, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![k3, "cmd3", "safe", "", now],
             )
             .unwrap();
         assert_eq!(cache.count().unwrap(), 3);
@@ -422,8 +469,8 @@ mod tests {
         cache
             .conn
             .execute(
-                "INSERT INTO cache (key, command, danger, created_at) VALUES (?1, ?2, ?3, ?4)",
-                rusqlite::params!["old_key", "old_cmd", "safe", 0u64],
+                "INSERT INTO cache (key, command, danger, explanation, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params!["old_key", "old_cmd", "safe", "", 0u64],
             )
             .unwrap();
         assert_eq!(cache.count().unwrap(), 1);
@@ -432,10 +479,57 @@ mod tests {
     }
 
     #[test]
+    fn put_and_get_with_explanation() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache
+            .put(
+                "list files",
+                "Linux",
+                "bash",
+                "ls -la",
+                "safe",
+                "ls: list dir\n-la: all + long",
+            )
+            .unwrap();
+
+        let (cmd, danger, explanation) = cache.get("list files", "Linux", "bash").unwrap().unwrap();
+        assert_eq!(cmd, "ls -la");
+        assert_eq!(danger, "safe");
+        assert_eq!(explanation, "ls: list dir\n-la: all + long");
+    }
+
+    #[test]
+    fn put_empty_explanation_returns_empty() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache.put("q", "Linux", "bash", "cmd", "safe", "").unwrap();
+        let (_, _, explanation) = cache.get("q", "Linux", "bash").unwrap().unwrap();
+        assert_eq!(explanation, "");
+    }
+
+    #[test]
+    fn update_explanation_existing_entry() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache.put("q", "Linux", "bash", "ls", "safe", "").unwrap();
+        cache
+            .update_explanation("q", "Linux", "bash", "ls: list files")
+            .unwrap();
+        let (_, _, explanation) = cache.get("q", "Linux", "bash").unwrap().unwrap();
+        assert_eq!(explanation, "ls: list files");
+    }
+
+    #[test]
+    fn update_explanation_nonexistent_noop() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache
+            .update_explanation("nope", "Linux", "bash", "text")
+            .unwrap();
+    }
+
+    #[test]
     fn cross_platform_isolation() {
         let cache = Cache::open_in_memory(168).unwrap();
         cache
-            .put("list files", "Linux", "bash", "ls -la", "safe")
+            .put("list files", "Linux", "bash", "ls -la", "safe", "")
             .unwrap();
 
         // Same query on Windows should not hit

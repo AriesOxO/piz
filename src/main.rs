@@ -167,6 +167,7 @@ async fn run() -> Result<()> {
                     cfg.auto_confirm_safe,
                     cfg.chat_history_size,
                     cli.verbose,
+                    cli.detail || cfg.show_explanation,
                 )
                 .await;
             }
@@ -232,9 +233,13 @@ async fn run() -> Result<()> {
         None
     };
 
+    let detail_active = cli.detail || cfg.show_explanation;
+
     // Check cache
     if let Some(ref c) = cache {
-        if let Some((cached_cmd, cached_danger)) = c.get(&query, &ctx.os, &ctx.shell)? {
+        if let Some((cached_cmd, cached_danger, cached_explanation)) =
+            c.get(&query, &ctx.os, &ctx.shell)?
+        {
             // Re-validate injection detection on cached commands
             if let Some(reason) = danger::detect_injection(&cached_cmd) {
                 ui::print_danger(tr);
@@ -243,8 +248,30 @@ async fn run() -> Result<()> {
                 anyhow::bail!("Cached command blocked: {}", reason.message(tr));
             }
 
+            // Backfill explanation if detail mode is active but cache has none
+            let explanation = if detail_active && cached_explanation.is_empty() {
+                let spinner = ui::create_spinner(tr.detail_fetching);
+                let (sys, usr) =
+                    llm::prompt::build_detail_explain_prompt(&ctx, &cached_cmd, lang.code());
+                let expl = backend.chat(&sys, &usr).await.unwrap_or_default();
+                spinner.finish_and_clear();
+                let _ = c.update_explanation(&query, &ctx.os, &ctx.shell, &expl);
+                expl
+            } else {
+                cached_explanation
+            };
+
+            let explanation_ref = if detail_active && !explanation.is_empty() {
+                Some(explanation.as_str())
+            } else {
+                None
+            };
+
             // Pipe mode: output only the command
             if cli.pipe {
+                if let Some(expl) = explanation_ref {
+                    eprintln!("{}", expl);
+                }
                 println!("{}", cached_cmd);
                 return Ok(());
             }
@@ -256,8 +283,14 @@ async fn run() -> Result<()> {
 
             // Eval mode for cached commands
             if cli.eval {
-                return handle_eval_mode(&cached_cmd, final_danger, cfg.auto_confirm_safe, tr)
-                    .await;
+                return handle_eval_mode(
+                    &cached_cmd,
+                    final_danger,
+                    cfg.auto_confirm_safe,
+                    tr,
+                    explanation_ref,
+                )
+                .await;
             }
 
             return handle_command_with_autofix(
@@ -268,6 +301,7 @@ async fn run() -> Result<()> {
                 backend.as_ref(),
                 &ctx,
                 lang.code(),
+                explanation_ref,
             )
             .await;
         }
@@ -301,6 +335,13 @@ async fn run() -> Result<()> {
         )
     };
 
+    // Augment prompt with explanation request if detail mode is active
+    let system_prompt = if detail_active {
+        llm::prompt::augment_prompt_with_explanation(&system_prompt, lang.code())
+    } else {
+        system_prompt
+    };
+
     if cli.verbose {
         eprintln!(
             "[verbose] system prompt length: {} chars",
@@ -323,10 +364,11 @@ async fn run() -> Result<()> {
     }
 
     // Multi-candidate selection or single-command parsing
-    let (command, llm_danger) = if candidates > 1 {
+    let (command, llm_danger, explanation) = if candidates > 1 {
         select_from_candidates(&response, tr)?
     } else {
-        parse_llm_response(&response)?
+        let parsed = parse_llm_response(&response)?;
+        (parsed.command, parsed.danger, parsed.explanation)
     };
 
     // Injection detection
@@ -338,8 +380,17 @@ async fn run() -> Result<()> {
         anyhow::bail!("Command blocked: {}", reason.message(tr));
     }
 
+    let explanation_ref = if detail_active && !explanation.is_empty() {
+        Some(explanation.as_str())
+    } else {
+        None
+    };
+
     // Pipe mode: output only the command
     if cli.pipe {
+        if let Some(expl) = explanation_ref {
+            eprintln!("{}", expl);
+        }
         println!("{}", command);
         return Ok(());
     }
@@ -350,7 +401,14 @@ async fn run() -> Result<()> {
 
     // Eval mode: show UI, get confirmation, write command to file for shell wrapper
     if cli.eval {
-        return handle_eval_mode(&command, final_danger, cfg.auto_confirm_safe, tr).await;
+        return handle_eval_mode(
+            &command,
+            final_danger,
+            cfg.auto_confirm_safe,
+            tr,
+            explanation_ref,
+        )
+        .await;
     }
 
     // Execute the command (cache AFTER success, not before)
@@ -362,6 +420,7 @@ async fn run() -> Result<()> {
         backend.as_ref(),
         &ctx,
         lang.code(),
+        explanation_ref,
     )
     .await;
 
@@ -372,7 +431,14 @@ async fn run() -> Result<()> {
                 c.record_execution(&query, &last.command, last.exit_code, final_danger.as_str());
             // Only cache commands that were successfully executed
             if last.exit_code == 0 {
-                let _ = c.put(&query, &ctx.os, &ctx.shell, &command, final_danger.as_str());
+                let _ = c.put(
+                    &query,
+                    &ctx.os,
+                    &ctx.shell,
+                    &command,
+                    final_danger.as_str(),
+                    &explanation,
+                );
             }
         }
     }
@@ -393,8 +459,9 @@ async fn handle_eval_mode(
     danger: DangerLevel,
     auto_confirm: bool,
     tr: &i18n::T,
+    explanation: Option<&str>,
 ) -> Result<()> {
-    let choice = executor::prompt_user(command, danger, auto_confirm, tr)?;
+    let choice = executor::prompt_user(command, danger, auto_confirm, tr, explanation)?;
     let final_cmd = match choice {
         UserChoice::Execute => command.to_string(),
         UserChoice::Edit(edited) => {
@@ -421,6 +488,7 @@ async fn handle_eval_mode(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_command_with_autofix(
     command: &str,
     danger: DangerLevel,
@@ -429,8 +497,9 @@ async fn handle_command_with_autofix(
     backend: &dyn llm::LlmBackend,
     ctx: &context::SystemContext,
     lang: &str,
+    explanation: Option<&str>,
 ) -> Result<()> {
-    let choice = executor::prompt_user(command, danger, auto_confirm, tr)?;
+    let choice = executor::prompt_user(command, danger, auto_confirm, tr, explanation)?;
     let exec_result = match choice {
         UserChoice::Execute => Some(executor::execute_command_with_shell(
             command, &ctx.shell, tr,
@@ -466,6 +535,13 @@ async fn handle_command_with_autofix(
     Ok(())
 }
 
+/// Result of parsing an LLM translate response
+pub struct ParsedCommand {
+    pub command: String,
+    pub danger: DangerLevel,
+    pub explanation: String,
+}
+
 /// A candidate command from multi-candidate response
 struct Candidate {
     command: String,
@@ -496,11 +572,11 @@ fn parse_multi_candidate_response(response: &str) -> Result<Vec<Candidate>> {
     }
 
     // Fallback: try parsing as single object and wrap
-    let (cmd, danger) = parse_llm_response(response)?;
+    let parsed = parse_llm_response(response)?;
     Ok(vec![Candidate {
-        command: cmd,
-        danger,
-        explanation: String::new(),
+        command: parsed.command,
+        danger: parsed.danger,
+        explanation: parsed.explanation,
     }])
 }
 
@@ -553,11 +629,15 @@ fn extract_json_array(text: &str) -> Option<&str> {
 }
 
 /// Present candidates to user via dialoguer::Select and return chosen command
-fn select_from_candidates(response: &str, tr: &i18n::T) -> Result<(String, DangerLevel)> {
+fn select_from_candidates(response: &str, tr: &i18n::T) -> Result<(String, DangerLevel, String)> {
     let candidates = parse_multi_candidate_response(response)?;
 
     if candidates.len() == 1 {
-        return Ok((candidates[0].command.clone(), candidates[0].danger));
+        return Ok((
+            candidates[0].command.clone(),
+            candidates[0].danger,
+            candidates[0].explanation.clone(),
+        ));
     }
 
     let items: Vec<String> = candidates
@@ -580,7 +660,11 @@ fn select_from_candidates(response: &str, tr: &i18n::T) -> Result<(String, Dange
         .interact()?;
 
     let chosen = &candidates[selection];
-    Ok((chosen.command.clone(), chosen.danger))
+    Ok((
+        chosen.command.clone(),
+        chosen.danger,
+        chosen.explanation.clone(),
+    ))
 }
 
 /// Handle command in chat mode (non-fatal, continues the loop)
@@ -590,8 +674,9 @@ pub fn handle_command_in_chat(
     auto_confirm: bool,
     tr: &i18n::T,
     shell: &str,
+    explanation: Option<&str>,
 ) {
-    let choice = match executor::prompt_user(command, danger, auto_confirm, tr) {
+    let choice = match executor::prompt_user(command, danger, auto_confirm, tr, explanation) {
         Ok(c) => c,
         Err(e) => {
             ui::print_error(&format!("{:#}", e));
@@ -645,7 +730,7 @@ fn check_refusal(v: &serde_json::Value) -> Option<String> {
 ///
 /// NOTE: We intentionally do NOT fall back to "raw text as command" —
 /// if all parsing levels fail, it's an error, not a command to execute.
-pub fn parse_llm_response(response: &str) -> Result<(String, DangerLevel)> {
+pub fn parse_llm_response(response: &str) -> Result<ParsedCommand> {
     let trimmed = response.trim();
 
     // Level 1: Direct JSON parse
@@ -658,7 +743,12 @@ pub fn parse_llm_response(response: &str) -> Result<(String, DangerLevel)> {
                 .as_str()
                 .map(DangerLevel::from_str_level)
                 .unwrap_or(DangerLevel::Safe);
-            return Ok((cmd.to_string(), danger));
+            let explanation = v["explanation"].as_str().unwrap_or("").to_string();
+            return Ok(ParsedCommand {
+                command: cmd.to_string(),
+                danger,
+                explanation,
+            });
         }
     }
 
@@ -673,21 +763,34 @@ pub fn parse_llm_response(response: &str) -> Result<(String, DangerLevel)> {
                     .as_str()
                     .map(DangerLevel::from_str_level)
                     .unwrap_or(DangerLevel::Safe);
-                return Ok((cmd.to_string(), danger));
+                let explanation = v["explanation"].as_str().unwrap_or("").to_string();
+                return Ok(ParsedCommand {
+                    command: cmd.to_string(),
+                    danger,
+                    explanation,
+                });
             }
         }
     }
 
     // Level 3: Structural regex extraction — handles broken JSON (e.g. unescaped backslashes)
     // Uses the known field structure to locate the command value without relying on JSON escaping.
-    if let Some(result) = extract_command_by_structure(trimmed) {
-        return Ok(result);
+    if let Some((cmd, danger)) = extract_command_by_structure(trimmed) {
+        return Ok(ParsedCommand {
+            command: cmd,
+            danger,
+            explanation: String::new(),
+        });
     }
 
     // Level 4: Extract backtick-wrapped command (last resort for non-JSON responses)
     if let Some(cmd) = extract_backtick_command(trimmed) {
         if !cmd.is_empty() {
-            return Ok((cmd.to_string(), DangerLevel::Safe));
+            return Ok(ParsedCommand {
+                command: cmd.to_string(),
+                danger: DangerLevel::Safe,
+                explanation: String::new(),
+            });
         }
     }
 
@@ -816,33 +919,33 @@ mod tests {
     #[test]
     fn parse_direct_json_safe() {
         let input = r#"{"command": "ls -la", "danger": "safe"}"#;
-        let (cmd, danger) = parse_llm_response(input).unwrap();
-        assert_eq!(cmd, "ls -la");
-        assert_eq!(danger, DangerLevel::Safe);
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, "ls -la");
+        assert_eq!(parsed.danger, DangerLevel::Safe);
     }
 
     #[test]
     fn parse_direct_json_dangerous() {
         let input = r#"{"command": "rm -rf /", "danger": "dangerous"}"#;
-        let (cmd, danger) = parse_llm_response(input).unwrap();
-        assert_eq!(cmd, "rm -rf /");
-        assert_eq!(danger, DangerLevel::Dangerous);
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, "rm -rf /");
+        assert_eq!(parsed.danger, DangerLevel::Dangerous);
     }
 
     #[test]
     fn parse_direct_json_warning() {
         let input = r#"{"command": "sudo apt update", "danger": "warning"}"#;
-        let (cmd, danger) = parse_llm_response(input).unwrap();
-        assert_eq!(cmd, "sudo apt update");
-        assert_eq!(danger, DangerLevel::Warning);
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, "sudo apt update");
+        assert_eq!(parsed.danger, DangerLevel::Warning);
     }
 
     #[test]
     fn parse_direct_json_missing_danger_defaults_safe() {
         let input = r#"{"command": "df -h"}"#;
-        let (cmd, danger) = parse_llm_response(input).unwrap();
-        assert_eq!(cmd, "df -h");
-        assert_eq!(danger, DangerLevel::Safe);
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, "df -h");
+        assert_eq!(parsed.danger, DangerLevel::Safe);
     }
 
     // ── Level 2: JSON embedded in text ──
@@ -851,16 +954,16 @@ mod tests {
     fn parse_json_in_text() {
         let input =
             r#"Here is the command: {"command": "df -h", "danger": "safe"} Hope this helps!"#;
-        let (cmd, danger) = parse_llm_response(input).unwrap();
-        assert_eq!(cmd, "df -h");
-        assert_eq!(danger, DangerLevel::Safe);
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, "df -h");
+        assert_eq!(parsed.danger, DangerLevel::Safe);
     }
 
     #[test]
     fn parse_json_with_markdown_wrapper() {
         let input = "```json\n{\"command\": \"top -n 1\", \"danger\": \"safe\"}\n```";
-        let (cmd, _) = parse_llm_response(input).unwrap();
-        assert_eq!(cmd, "top -n 1");
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, "top -n 1");
     }
 
     // ── Level 3: Structural regex extraction (broken JSON) ──
@@ -869,25 +972,25 @@ mod tests {
     fn parse_broken_json_windows_path_backslash() {
         // LLM returns invalid JSON: D:\ causes the \" to be treated as escaped quote
         let input = r#"{"command": "cd /d D:\", "danger": "safe"}"#;
-        let (cmd, danger) = parse_llm_response(input).unwrap();
-        assert_eq!(cmd, r#"cd /d D:\"#);
-        assert_eq!(danger, DangerLevel::Safe);
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, r#"cd /d D:\"#);
+        assert_eq!(parsed.danger, DangerLevel::Safe);
     }
 
     #[test]
     fn parse_broken_json_windows_path_with_subdir() {
         let input = r#"{"command": "dir C:\Users\test", "danger": "safe"}"#;
-        let (cmd, danger) = parse_llm_response(input).unwrap();
-        assert!(cmd.contains(r"C:\Users\test"));
-        assert_eq!(danger, DangerLevel::Safe);
+        let parsed = parse_llm_response(input).unwrap();
+        assert!(parsed.command.contains(r"C:\Users\test"));
+        assert_eq!(parsed.danger, DangerLevel::Safe);
     }
 
     #[test]
     fn parse_broken_json_with_warning_danger() {
         let input = r#"{"command": "del C:\temp\*", "danger": "warning"}"#;
-        let (cmd, danger) = parse_llm_response(input).unwrap();
-        assert!(cmd.contains(r"C:\temp\*"));
-        assert_eq!(danger, DangerLevel::Warning);
+        let parsed = parse_llm_response(input).unwrap();
+        assert!(parsed.command.contains(r"C:\temp\*"));
+        assert_eq!(parsed.danger, DangerLevel::Warning);
     }
 
     // ── Level 4: Backtick-wrapped command ──
@@ -895,9 +998,9 @@ mod tests {
     #[test]
     fn parse_backtick_command() {
         let input = "You can use `du -sh *` to check sizes.";
-        let (cmd, danger) = parse_llm_response(input).unwrap();
-        assert_eq!(cmd, "du -sh *");
-        assert_eq!(danger, DangerLevel::Safe);
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, "du -sh *");
+        assert_eq!(parsed.danger, DangerLevel::Safe);
     }
 
     // ── Error cases ──
@@ -933,16 +1036,19 @@ mod tests {
     fn parse_complex_command_in_json() {
         let input =
             r#"{"command": "find . -name '*.rs' -exec grep -l 'TODO' {} +", "danger": "safe"}"#;
-        let (cmd, _) = parse_llm_response(input).unwrap();
-        assert_eq!(cmd, "find . -name '*.rs' -exec grep -l 'TODO' {} +");
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(
+            parsed.command,
+            "find . -name '*.rs' -exec grep -l 'TODO' {} +"
+        );
     }
 
     #[test]
     fn parse_pipe_command_in_json() {
         let input = r#"{"command": "ps aux | grep nginx | awk '{print $2}'", "danger": "safe"}"#;
-        let (cmd, _) = parse_llm_response(input).unwrap();
-        assert!(cmd.contains("ps aux"));
-        assert!(cmd.contains("grep nginx"));
+        let parsed = parse_llm_response(input).unwrap();
+        assert!(parsed.command.contains("ps aux"));
+        assert!(parsed.command.contains("grep nginx"));
     }
 
     // ── Refusal detection ──
@@ -1023,5 +1129,34 @@ mod tests {
         let input = r#"[{"a":[1,2]},{"b":3}]"#;
         let arr = extract_json_array(input).unwrap();
         assert_eq!(arr, input);
+    }
+
+    // ── Explanation parsing ──
+
+    #[test]
+    fn parse_response_with_explanation() {
+        let input = r#"{"command": "ls -la", "danger": "safe", "explanation": "`ls` list files\n`-la` all + long"}"#;
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, "ls -la");
+        assert_eq!(parsed.danger, DangerLevel::Safe);
+        assert!(!parsed.explanation.is_empty());
+        assert!(parsed.explanation.contains("list files"));
+    }
+
+    #[test]
+    fn parse_response_without_explanation() {
+        let input = r#"{"command": "ls -la", "danger": "safe"}"#;
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, "ls -la");
+        assert_eq!(parsed.explanation, "");
+    }
+
+    #[test]
+    fn parse_structural_regex_has_empty_explanation() {
+        // Broken JSON falls back to structural regex — explanation is lost, that's OK
+        let input = r#"{"command": "cd /d D:\", "danger": "safe", "explanation": "changes dir"}"#;
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, r#"cd /d D:\"#);
+        assert_eq!(parsed.explanation, "");
     }
 }

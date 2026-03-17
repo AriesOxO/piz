@@ -29,6 +29,7 @@ pub fn prompt_user(
     danger: DangerLevel,
     auto_confirm: bool,
     tr: &i18n::T,
+    explanation: Option<&str>,
 ) -> Result<UserChoice> {
     // Show danger warnings
     match danger {
@@ -39,6 +40,13 @@ pub fn prompt_user(
 
     ui::print_command(command);
     println!();
+
+    // Show explanation if provided
+    if let Some(expl) = explanation {
+        if !expl.is_empty() {
+            ui::print_explanation(tr, expl);
+        }
+    }
 
     // Auto-confirm safe commands if configured
     if auto_confirm && danger == DangerLevel::Safe {

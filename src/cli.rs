@@ -38,6 +38,10 @@ pub struct Cli {
     #[arg(short = 'n', long, default_value = "1")]
     pub candidates: u8,
 
+    /// Show detailed command explanation inline
+    #[arg(short = 'd', long = "detail")]
+    pub detail: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -90,5 +94,36 @@ pub enum Commands {
 impl Cli {
     pub fn generate_completions(shell: clap_complete::Shell) {
         clap_complete::generate(shell, &mut Self::command(), "piz", &mut std::io::stdout());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn detail_flag_short() {
+        let cli = Cli::try_parse_from(["piz", "-d", "list", "files"]).unwrap();
+        assert!(cli.detail);
+    }
+
+    #[test]
+    fn detail_flag_long() {
+        let cli = Cli::try_parse_from(["piz", "--detail", "list", "files"]).unwrap();
+        assert!(cli.detail);
+    }
+
+    #[test]
+    fn detail_flag_default_false() {
+        let cli = Cli::try_parse_from(["piz", "list", "files"]).unwrap();
+        assert!(!cli.detail);
+    }
+
+    #[test]
+    fn detail_and_explain_no_conflict() {
+        let cli = Cli::try_parse_from(["piz", "-d", "-e", "ls -la"]).unwrap();
+        assert!(cli.detail);
+        assert_eq!(cli.explain.as_deref(), Some("ls -la"));
     }
 }

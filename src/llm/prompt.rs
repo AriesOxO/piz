@@ -427,6 +427,28 @@ Error: ModuleNotFoundError: No module named 'flask'
     (system, user)
 }
 
+/// Augment a translate system prompt to also request an explanation field.
+/// Appends the explanation requirement to the JSON output format.
+pub fn augment_prompt_with_explanation(system: &str, lang: &str) -> String {
+    let lang_name = lang_display(lang);
+    let old_pattern = r#""danger": "<safe|warning|dangerous>"}"#;
+    let new_pattern = format!(
+        r#""danger": "<safe|warning|dangerous>", "explanation": "<detailed parameter-by-parameter breakdown, one line per flag/argument, in {lang}>"}}"#,
+        lang = lang_name,
+    );
+    system.replace(old_pattern, &new_pattern)
+}
+
+/// Build a lightweight prompt to fetch only the explanation for a known command.
+/// Used when a cached command has no explanation and detail mode is active.
+pub fn build_detail_explain_prompt(
+    ctx: &SystemContext,
+    command: &str,
+    lang: &str,
+) -> (String, String) {
+    build_explain_prompt(ctx, command, lang)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -601,5 +623,35 @@ mod tests {
         assert!(shell_hints("zsh").contains("globbing"));
         assert!(shell_hints("bash").contains("$VAR"));
         assert!(shell_hints("fish").contains("set VAR"));
+    }
+
+    // ── detail augmentation ──
+
+    #[test]
+    fn augment_prompt_adds_explanation_field() {
+        let (system, _) = build_translate_prompt(&test_ctx(), "test", "en");
+        let augmented = augment_prompt_with_explanation(&system, "en");
+        assert!(augmented.contains("\"explanation\""));
+    }
+
+    #[test]
+    fn augment_prompt_preserves_command_and_danger() {
+        let (system, _) = build_translate_prompt(&test_ctx(), "test", "en");
+        let augmented = augment_prompt_with_explanation(&system, "en");
+        assert!(augmented.contains("\"command\""));
+        assert!(augmented.contains("\"danger\""));
+    }
+
+    #[test]
+    fn non_augmented_prompt_has_no_explanation_field() {
+        let (system, _) = build_translate_prompt(&test_ctx(), "test", "en");
+        assert!(!system.contains("\"explanation\":"));
+    }
+
+    #[test]
+    fn build_detail_explain_prompt_contains_command() {
+        let (system, user) = build_detail_explain_prompt(&test_ctx(), "tar -czf a.tar.gz .", "en");
+        assert!(system.contains("explain"));
+        assert!(user.contains("tar -czf a.tar.gz ."));
     }
 }

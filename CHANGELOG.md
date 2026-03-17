@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [0.3.0] - 2026-03-17
+
+### Added / 新增
+
+- Inline command explanation: show parameter-by-parameter breakdown before the confirmation menu, helping users understand generated commands without leaving piz
+- 内联命令解释：在确认菜单前展示逐参数分解说明，用户无需离开 piz 即可理解生成的命令
+- Config option `show_explanation` (default `false`) to always show explanations
+- 配置项 `show_explanation`（默认 `false`），开启后始终显示命令解释
+- CLI flag `-d`/`--detail` to enable explanation for a single invocation
+- CLI 标志 `-d`/`--detail`，单次调用时临时开启命令解释
+- Chat mode `/detail` slash command to toggle explanations on/off during a session
+- 聊天模式 `/detail` 斜杠命令，会话中切换命令解释开关
+- Pipe mode: explanation output to stderr (command stays on stdout)
+- 管道模式：解释内容输出到 stderr（命令保持 stdout 输出）
+- Explanation caching in SQLite alongside commands, with backfill for cache hits missing explanations
+- 命令解释与命令一起缓存在 SQLite 中，缓存命中但缺少解释时自动补充
+- SQLite schema migration: auto-adds `explanation` column to existing databases
+- SQLite 架构迁移：自动为现有数据库添加 `explanation` 列
+- `ParsedCommand` struct replacing tuple returns for cleaner response parsing
+- `ParsedCommand` 结构体替代元组返回值，使响应解析更清晰
+- 208 tests (198 unit + 10 integration)
+- 208 个测试（198 单元测试 + 10 集成测试）
+
 ## [0.2.9] - 2026-03-17
 
 ### Fixed / 修复

@@ -106,6 +106,11 @@ pub struct T {
     pub inject_ld_preload: &'static str,
     pub inject_histfile_suppression: &'static str,
     pub inject_proc_subst_redirect: &'static str,
+
+    // ── detail ──
+    pub detail_toggle_on: &'static str,
+    pub detail_toggle_off: &'static str,
+    pub detail_fetching: &'static str,
 }
 
 pub fn t(lang: Lang) -> &'static T {
@@ -190,6 +195,10 @@ static ZH: T = T {
     inject_ld_preload: "可疑：LD_PRELOAD 可能用于劫持共享库",
     inject_histfile_suppression: "可疑：禁用命令历史记录以隐藏操作",
     inject_proc_subst_redirect: "可疑：通过进程替换重定向到远程主机",
+
+    detail_toggle_on: "命令详情: 已开启",
+    detail_toggle_off: "命令详情: 已关闭",
+    detail_fetching: "正在获取命令解释...",
 };
 
 static EN: T = T {
@@ -267,6 +276,10 @@ static EN: T = T {
     inject_ld_preload: "Suspicious: LD_PRELOAD may be used to hijack shared libraries",
     inject_histfile_suppression: "Suspicious: disabling command history to hide activity",
     inject_proc_subst_redirect: "Suspicious: process substitution redirect to remote host",
+
+    detail_toggle_on: "Command detail: ON",
+    detail_toggle_off: "Command detail: OFF",
+    detail_fetching: "Fetching explanation...",
 };
 
 #[cfg(test)]
@@ -471,6 +484,21 @@ mod tests {
             assert!(
                 !tr.inject_proc_subst_redirect.is_empty(),
                 "{:?}: inject_proc_subst_redirect",
+                lang
+            );
+            assert!(
+                !tr.detail_toggle_on.is_empty(),
+                "{:?}: detail_toggle_on",
+                lang
+            );
+            assert!(
+                !tr.detail_toggle_off.is_empty(),
+                "{:?}: detail_toggle_off",
+                lang
+            );
+            assert!(
+                !tr.detail_fetching.is_empty(),
+                "{:?}: detail_fetching",
                 lang
             );
         }

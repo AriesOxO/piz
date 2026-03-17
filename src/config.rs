@@ -12,6 +12,8 @@ pub struct Config {
     pub cache_ttl_hours: u64,
     #[serde(default)]
     pub auto_confirm_safe: bool,
+    #[serde(default)]
+    pub show_explanation: bool,
     #[serde(default = "default_language")]
     pub language: String,
     #[serde(default = "default_chat_history_size")]
@@ -579,6 +581,30 @@ api_key = "sk-test"
         assert!(masked.contains("sk-t...3456"));
         assert!(!masked.contains("sk-test-key-123456"));
         assert!(masked.contains("gpt-4"));
+    }
+
+    #[test]
+    fn show_explanation_default_false() {
+        let cfg = parse_config("").unwrap();
+        assert!(!cfg.show_explanation);
+    }
+
+    #[test]
+    fn show_explanation_true() {
+        let cfg = parse_config("show_explanation = true").unwrap();
+        assert!(cfg.show_explanation);
+    }
+
+    #[test]
+    fn show_explanation_missing_defaults_false() {
+        let toml = r#"
+default_backend = "openai"
+auto_confirm_safe = true
+[openai]
+api_key = "sk-test"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert!(!cfg.show_explanation);
     }
 
     #[test]
