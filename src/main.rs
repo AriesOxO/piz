@@ -91,7 +91,13 @@ async fn run() -> Result<()> {
     }
 
     // Handle config subcommand before loading config
-    if let Some(Commands::Config { init, show, reset }) = &cli.command {
+    if let Some(Commands::Config {
+        init,
+        show,
+        raw,
+        reset,
+    }) = &cli.command
+    {
         if *init {
             return config::init_config();
         }
@@ -111,13 +117,12 @@ async fn run() -> Result<()> {
             }
             return Ok(());
         }
-        if *show {
+        if *show || !*raw {
             let path = config::config_path()?;
             if path.exists() {
                 let content = std::fs::read_to_string(&path)?;
-                let masked = config::mask_config_keys(&content);
                 println!("Config path: {}", path.display());
-                println!("{}", masked);
+                println!("{}", config::mask_config_keys(&content));
             } else {
                 println!("No config file found. Run `piz config --init` to create one.");
             }

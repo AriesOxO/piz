@@ -56,6 +56,9 @@ pub enum Commands {
         /// Show current configuration (API keys masked)
         #[arg(long)]
         show: bool,
+        /// Show current configuration with raw secret values
+        #[arg(long)]
+        raw: bool,
         /// Reset configuration (delete config file)
         #[arg(long)]
         reset: bool,
