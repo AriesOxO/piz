@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [0.2.6] - 2026-03-17
+
+### Fixed / 修复
+- `piz update` download now supports proxy via `https_proxy`/`HTTPS_PROXY`/`ALL_PROXY` environment variables
+- `piz update` 下载现在支持通过 `https_proxy`/`HTTPS_PROXY`/`ALL_PROXY` 环境变量设置代理
+- Support `GITHUB_MIRROR` env var for GitHub download acceleration (e.g. `export GITHUB_MIRROR=https://mirror.ghproxy.com`)
+- 支持 `GITHUB_MIRROR` 环境变量加速 GitHub 下载（如 `export GITHUB_MIRROR=https://mirror.ghproxy.com`）
+- Download failure now shows actionable hint with proxy/mirror setup instructions
+- 下载失败时显示代理/镜像配置提示，方便用户排查
+- Added `socks` feature to reqwest for SOCKS5 proxy support
+- 为 reqwest 添加 `socks` feature，支持 SOCKS5 代理
+
 ## [0.2.5] - 2026-03-17
 
 ### Added / 新增

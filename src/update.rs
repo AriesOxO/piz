@@ -118,10 +118,7 @@ pub async fn check_update_hint() {
 }
 
 async fn fetch_latest_version_quiet() -> Option<String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .ok()?;
+    let client = build_proxy_client(5).ok()?;
     let resp = client
         .get(GITHUB_API_LATEST)
         .header("User-Agent", format!("piz/{}", current_version()))
@@ -268,9 +265,7 @@ pub async fn run_update(tr: &crate::i18n::T) -> Result<()> {
 }
 
 async fn fetch_latest_release() -> Result<GitHubRelease> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()?;
+    let client = build_proxy_client(30)?;
     let resp = client
         .get(GITHUB_API_LATEST)
         .header("User-Agent", format!("piz/{}", current_version()))
@@ -333,6 +328,43 @@ fn find_platform_asset(assets: &[ReleaseAsset]) -> Result<String> {
     );
 }
 
+/// Build a reqwest client that respects https_proxy/HTTPS_PROXY/ALL_PROXY env vars.
+fn build_proxy_client(timeout_secs: u64) -> Result<reqwest::Client> {
+    let mut builder =
+        reqwest::Client::builder().timeout(std::time::Duration::from_secs(timeout_secs));
+
+    // reqwest with rustls-tls doesn't auto-detect system proxy,
+    // so we manually check common proxy env vars.
+    let proxy_url = std::env::var("https_proxy")
+        .or_else(|_| std::env::var("HTTPS_PROXY"))
+        .or_else(|_| std::env::var("ALL_PROXY"))
+        .or_else(|_| std::env::var("all_proxy"));
+
+    if let Ok(proxy) = proxy_url {
+        if !proxy.is_empty() {
+            builder = builder.proxy(reqwest::Proxy::all(&proxy)?);
+        }
+    }
+
+    builder.build().context("Failed to build HTTP client")
+}
+
+/// Try GitHub mirror URLs for users in regions where github.com downloads are blocked.
+/// Checks GITHUB_MIRROR env var first, then falls back to the original URL.
+fn get_download_urls(url: &str) -> Vec<String> {
+    let mut urls = Vec::new();
+
+    // User-specified mirror takes priority
+    if let Ok(mirror) = std::env::var("GITHUB_MIRROR") {
+        let mirrored = url.replace("https://github.com", mirror.trim_end_matches('/'));
+        urls.push(mirrored);
+    }
+
+    // Original URL as fallback
+    urls.push(url.to_string());
+    urls
+}
+
 async fn download_to_temp(url: &str, is_zh: bool) -> Result<std::path::PathBuf> {
     let msg = if is_zh {
         "下载中..."
@@ -341,15 +373,45 @@ async fn download_to_temp(url: &str, is_zh: bool) -> Result<std::path::PathBuf> 
     };
     let spinner = crate::ui::create_spinner(msg);
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(300))
-        .build()?;
-    let resp = client
-        .get(url)
-        .header("User-Agent", format!("piz/{}", current_version()))
-        .send()
-        .await
-        .context("Download failed")?;
+    let client = build_proxy_client(300)?;
+    let download_urls = get_download_urls(url);
+
+    let mut last_err = None;
+    let mut resp = None;
+    for download_url in &download_urls {
+        match client
+            .get(download_url)
+            .header("User-Agent", format!("piz/{}", current_version()))
+            .send()
+            .await
+        {
+            Ok(r) if r.status().is_success() => {
+                resp = Some(r);
+                break;
+            }
+            Ok(r) => {
+                last_err = Some(anyhow::anyhow!("HTTP {}", r.status()));
+            }
+            Err(e) => {
+                last_err = Some(e.into());
+            }
+        }
+    }
+
+    let resp = match resp {
+        Some(r) => r,
+        None => {
+            spinner.finish_and_clear();
+            let hint = if is_zh {
+                "\n提示: 可设置代理或镜像加速下载:\n  export https_proxy=http://proxy:port\n  export GITHUB_MIRROR=https://mirror.ghproxy.com"
+            } else {
+                "\nHint: set proxy or mirror for download:\n  export https_proxy=http://proxy:port\n  export GITHUB_MIRROR=https://mirror.ghproxy.com"
+            };
+            return Err(last_err
+                .unwrap_or_else(|| anyhow::anyhow!("Download failed"))
+                .context(format!("Download failed{}", hint)));
+        }
+    };
 
     if !resp.status().is_success() {
         spinner.finish_and_clear();
