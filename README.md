@@ -18,6 +18,10 @@
 
 ---
 
+<p align="center">
+  <img src="assets/demo.gif" alt="piz demo" width="800">
+</p>
+
 ## What is piz?
 
 **piz** solves one problem: you know *what* you want to do, but not the exact command. Describe it in plain language, and piz translates it into the right shell command for your OS and shell.

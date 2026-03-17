@@ -18,6 +18,10 @@
 
 ---
 
+<p align="center">
+  <img src="assets/demo.gif" alt="piz demo" width="800">
+</p>
+
 ## piz 是什么？
 
 **piz** 解决一个问题：你知道想做什么，但记不住具体命令。用自然语言描述你的需求，piz 自动翻译成适合当前系统和 Shell 的命令。
