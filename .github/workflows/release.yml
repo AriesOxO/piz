@@ -16,13 +16,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            name: x86_64-linux-gnu
+          - target: x86_64-unknown-linux-musl
+            name: x86_64-linux-musl
             os: ubuntu-22.04
             archive: tar.gz
-            deb: true
-          - target: aarch64-unknown-linux-gnu
-            name: aarch64-linux-gnu
+          - target: aarch64-unknown-linux-musl
+            name: aarch64-linux-musl
             os: ubuntu-22.04-arm
             archive: tar.gz
           - target: x86_64-apple-darwin
@@ -45,6 +44,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
+
+      # ── Install musl toolchain (Linux) ──
+      - name: Install musl-tools
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       # ── Build ──
       - name: Build
@@ -86,16 +90,6 @@ jobs:
           $msi = Get-ChildItem target/wix/*.msi | Select-Object -First 1
           Copy-Item $msi.FullName "piz-${{ matrix.name }}.msi"
 
-      # ── Package: deb (Linux x86_64) ──
-      - name: Install cargo-deb
-        if: matrix.deb
-        run: cargo install cargo-deb
-      - name: Build deb
-        if: matrix.deb
-        run: |
-          cargo deb --target ${{ matrix.target }} --no-build
-          cp target/${{ matrix.target }}/debian/*.deb piz-${{ matrix.name }}.deb
-
       # ── Upload ──
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -105,7 +99,6 @@ jobs:
             piz-${{ matrix.name }}.tar.gz
             piz-${{ matrix.name }}.zip
             piz-${{ matrix.name }}.msi
-            piz-${{ matrix.name }}.deb
           if-no-files-found: ignore
 
   release:
@@ -130,4 +123,3 @@ jobs:
             piz-*.tar.gz
             piz-*.zip
             piz-*.msi
-            piz-*.deb

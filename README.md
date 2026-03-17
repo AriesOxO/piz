@@ -78,15 +78,15 @@ cargo install piz
 
 **Manual download:**
 
-Download binaries, `.msi` (Windows) or `.deb` (Debian/Ubuntu) from [Releases](https://github.com/AriesOxO/piz/releases).
+Download binaries or `.msi` (Windows) from [Releases](https://github.com/AriesOxO/piz/releases). Linux binaries are statically linked (musl), compatible with any Linux distribution.
 
 | Platform | Downloads |
 |----------|-----------|
 | Windows x86_64 | `.msi` `.zip` |
 | macOS x86_64 | `.tar.gz` |
 | macOS ARM64 (Apple Silicon) | `.tar.gz` |
-| Linux x86_64 | `.tar.gz` `.deb` |
-| Linux ARM64 | `.tar.gz` |
+| Linux x86_64 (static musl) | `.tar.gz` |
+| Linux ARM64 (static musl) | `.tar.gz` |
 
 ### Setup
 
