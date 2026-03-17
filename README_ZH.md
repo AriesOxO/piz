@@ -40,10 +40,12 @@ $ piz 查看磁盘使用情况
 - **多候选命令** — `-n` 参数生成多个命令方案，自主选择最优方案
 - **本地缓存** — SQLite 缓存 + TTL 过期 + LRU 淘汰 + 最大条目数限制，重复查询秒返回
 - **执行历史** — `piz history` 查看和搜索所有执行过的命令
+- **Shell 集成** — `piz init <shell>` 生成 Shell 包装函数，使 `cd`/`export`/`source` 在当前 Shell 中正确生效（bash、zsh、fish、PowerShell）
+- **Eval 模式** — `--eval` 将确认后的命令输出给 Shell 包装函数执行
 - **Shell 补全** — 支持 bash、zsh、fish、PowerShell 自动补全
 - **管道模式** — `--pipe` 纯命令输出，便于脚本集成
 - **多语言界面** — 中文、英文，安全提示信息全面国际化
-- **跨平台** — Windows (PowerShell/cmd)、macOS、Linux (bash/zsh/fish)
+- **跨平台** — Windows (PowerShell/cmd)、macOS、Linux (bash/zsh/fish)，零侵入编码处理（不修改 `chcp`/`OutputEncoding`）
 - **交互式配置** — 首次运行自动引导，内置供应商预设，无需手动编辑配置
 - **NO_COLOR 支持** — 尊重 `NO_COLOR` 环境变量
 - **API 容错** — 429/5xx 错误自动重试 + 指数退避
@@ -197,6 +199,33 @@ piz completions fish > ~/.config/fish/completions/piz.fish  # Fish
 piz completions powershell > piz.ps1               # PowerShell
 ```
 
+### Shell 集成
+
+Shell 集成可以让 `cd`、`export`、`source` 等命令在当前 Shell 会话中正确生效。运行 `piz init <shell>` 并将输出添加到你的 Shell 配置文件中：
+
+**Bash / Zsh：**
+
+```bash
+# 添加到 ~/.bashrc 或 ~/.zshrc：
+eval "$(piz init bash)"   # 或：eval "$(piz init zsh)"
+```
+
+**Fish：**
+
+```fish
+# 添加到 ~/.config/fish/config.fish：
+piz init fish | source
+```
+
+**PowerShell：**
+
+```powershell
+# 添加到 $PROFILE：
+Invoke-Expression (piz init powershell | Out-String)
+```
+
+配置完成后，piz 会自动使用 `--eval` 模式，`cd`、`export`、`source` 等命令将在当前 Shell 中正确生效。
+
 ### 管道模式
 
 ```bash
@@ -222,6 +251,7 @@ piz --no-cache 查看系统信息       # 跳过缓存
 piz --verbose 列出文件            # 调试：显示 Prompt 和 LLM 响应
 piz -n 3 列出文件                 # 生成 3 个候选命令
 piz clear-cache                   # 清空缓存
+piz --eval 列出文件               # Eval 模式（用于 Shell 集成）
 piz --version                     # 查看版本
 ```
 
@@ -409,6 +439,7 @@ piz/
 │   ├── fix.rs           # 命令纠错模式 + 自动修复重试循环
 │   ├── chat.rs          # 交互式对话模式（斜杠命令 + 历史持久化）
 │   ├── history.rs       # Shell 历史记录读取
+│   ├── shell_init.rs    # Shell 集成代码生成（bash/zsh/fish/PowerShell）
 │   └── ui.rs            # 终端输出格式化（Spinner、Diff、着色）
 ├── tests/
 │   └── integration.rs   # 集成测试
@@ -424,7 +455,7 @@ git clone https://github.com/AriesOxO/piz.git
 cd piz
 
 cargo build --release      # 构建
-cargo test                 # 运行测试（157 个）
+cargo test                 # 运行测试（174 个）
 cargo install --path .     # 安装到 PATH
 ```
 

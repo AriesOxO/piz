@@ -8,6 +8,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [0.2.3] - 2026-03-17
+
+### Added / 新增
+- Shell integration: `piz init <shell>` generates wrapper functions for bash/zsh/fish/PowerShell, enabling cd/export/source to work correctly in the current shell
+- Shell 集成：`piz init <shell>` 生成 Shell 包装函数（bash/zsh/fish/PowerShell），使 cd/export/source 等命令在当前 Shell 中正确生效
+- Eval mode (`--eval`): show UI normally, output confirmed command for shell wrapper to eval
+- Eval 模式（`--eval`）：正常显示 UI，确认后将命令输出给 Shell 包装函数执行
+- API-level JSON mode for OpenAI (`response_format`), Gemini (`responseMimeType`), Ollama (`format: json`)
+- 启用 API 级 JSON 模式：OpenAI（`response_format`）、Gemini（`responseMimeType`）、Ollama（`format: json`）
+- Structural regex fallback for broken JSON parsing (unescaped Windows path backslashes)
+- 结构化正则回退解析，处理无效 JSON（Windows 路径反斜杠未转义问题）
+- Manual test scripts for 25 complex scenarios (PowerShell + bash)
+- 25 个复杂场景手动测试脚本（PowerShell + bash）
+
+### Fixed / 修复
+- Cache only after successful command execution, preventing failed commands from polluting cache
+- 仅在命令成功执行后写入缓存，防止失败命令污染缓存
+- Removed dangerous Level 4 raw-text-as-command fallback in response parsing
+- 移除危险的第 4 级原始文本回退解析，防止 JSON 垃圾被当作命令执行
+- Unified shell detection in executor with context module (parent-process based), replacing unreliable PSModulePath check
+- 统一 executor 与 context 模块的 Shell 检测逻辑（基于父进程），替换不可靠的 PSModulePath 检查
+- Non-invasive encoding: removed `[Console]::OutputEncoding` and `chcp 65001` prefixes, rely on GBK decode fallback
+- 零侵入编码处理：移除 `[Console]::OutputEncoding` 和 `chcp 65001` 前缀，依赖 GBK 解码回退
+- Added JSON backslash escaping instructions to all LLM prompts
+- 在所有 LLM 提示词中添加 JSON 反斜杠转义说明
+
 ## [0.2.2] - 2026-03-17
 
 ### Added / 新增

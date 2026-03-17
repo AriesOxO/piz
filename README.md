@@ -40,10 +40,12 @@ $ piz list all files larger than 100MB
 - **Multi-Candidate** - Generate multiple command options with `-n` and pick your preferred one
 - **Local Cache** - SQLite cache with TTL + LRU eviction, max entries limit, repeated queries return instantly
 - **Execution History** - Track all executed commands with `piz history`, searchable
+- **Shell Integration** - `piz init <shell>` generates shell wrapper functions so `cd`/`export`/`source` work correctly in the current shell (bash, zsh, fish, PowerShell)
+- **Eval Mode** - `--eval` outputs confirmed command for shell wrapper to eval, used by shell integration
 - **Shell Completions** - Generate completions for bash, zsh, fish, and PowerShell
 - **Pipe Mode** - Script-friendly output with `--pipe` for integration with other tools
 - **Multi-Language UI** - Chinese, English interface with localized security messages
-- **Cross-Platform** - Windows (PowerShell/cmd), macOS, Linux (bash/zsh/fish)
+- **Cross-Platform** - Windows (PowerShell/cmd), macOS, Linux (bash/zsh/fish) with non-invasive encoding (no `chcp`/`OutputEncoding` modification)
 - **Interactive Setup** - First-run wizard with provider presets, no manual config editing needed
 - **NO_COLOR Support** - Respects the `NO_COLOR` environment variable
 - **API Resilience** - Automatic retry with exponential backoff for 429/5xx errors
@@ -195,6 +197,33 @@ piz completions fish > ~/.config/fish/completions/piz.fish  # Fish
 piz completions powershell > piz.ps1               # PowerShell
 ```
 
+### Shell integration
+
+Shell integration enables commands like `cd`, `export`, and `source` to work correctly in your current shell session. Run `piz init <shell>` and add the output to your shell profile:
+
+**Bash / Zsh:**
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc:
+eval "$(piz init bash)"   # or: eval "$(piz init zsh)"
+```
+
+**Fish:**
+
+```fish
+# Add to ~/.config/fish/config.fish:
+piz init fish | source
+```
+
+**PowerShell:**
+
+```powershell
+# Add to $PROFILE:
+Invoke-Expression (piz init powershell | Out-String)
+```
+
+Once set up, piz will use `--eval` mode automatically, and commands like `cd`, `export`, `source` will take effect in your current shell.
+
 ### Pipe mode
 
 ```bash
@@ -220,6 +249,7 @@ piz --no-cache show memory         # Skip cache
 piz --verbose list files           # Debug: show prompts and LLM responses
 piz -n 3 list files                # Generate 3 candidate commands
 piz clear-cache                    # Clear all cached commands
+piz --eval list files                 # Eval mode (for shell integration)
 piz --version                      # Show version
 ```
 
@@ -407,6 +437,7 @@ piz/
 │   ├── fix.rs           # Command fix mode + auto-fix retry loop
 │   ├── chat.rs          # Interactive chat mode with slash commands + persistent history
 │   ├── history.rs       # Shell history reader
+│   ├── shell_init.rs    # Shell integration code generation (bash/zsh/fish/PowerShell)
 │   └── ui.rs            # Terminal output formatting (spinner, diff, colors)
 ├── tests/
 │   └── integration.rs   # Integration tests
@@ -422,7 +453,7 @@ git clone https://github.com/AriesOxO/piz.git
 cd piz
 
 cargo build --release      # Build
-cargo test                 # Run tests (157)
+cargo test                 # Run tests (174)
 cargo install --path .     # Install to PATH
 ```
 

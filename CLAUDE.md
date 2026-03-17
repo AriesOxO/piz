@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-piz is a Rust CLI tool that translates natural language into shell commands using LLM backends (OpenAI-compatible, Claude, Gemini, Ollama). It includes security layers (injection detection with i18n, danger classification), SQLite caching with LRU eviction, multi-language UI (zh/en), interactive chat mode, multi-candidate selection, execution history, shell completions, pipe mode, and auto-fix on command failure with retry.
+piz is a Rust CLI tool that translates natural language into shell commands using LLM backends (OpenAI-compatible, Claude, Gemini, Ollama). It includes security layers (injection detection with i18n, danger classification), SQLite caching with LRU eviction, multi-language UI (zh/en), interactive chat mode, multi-candidate selection, execution history, shell completions, pipe mode, shell integration (`piz init`), eval mode (`--eval`), non-invasive encoding (GBK decode fallback, no shell environment modification), and auto-fix on command failure with retry.
 
 ## Build & Development Commands
 
 ```bash
 cargo build                # Debug build
 cargo build --release      # Release build
-cargo test                 # Run all tests (157 tests: 149 unit + 8 integration)
+cargo test                 # Run all tests (174 tests: 166 unit + 8 integration)
 cargo test <test_name>     # Run a single test by name
 cargo fmt --all -- --check # Check formatting
 cargo clippy -- -D warnings # Lint (CI treats warnings as errors)
@@ -21,7 +21,7 @@ Requires Rust 1.70+. On Windows: MinGW-w64 or MSVC toolchain.
 
 ## Architecture
 
-**Entry flow:** `main.rs` parses CLI args (clap) -> dispatches to subcommands (fix, chat, config, clear-cache, explain, history, completions) or main translate flow -> calls LLM (with retry/backoff) -> parses response (4-level fallback: JSON > embedded JSON > backtick > raw text) -> injection scan -> danger classification -> user prompt -> execute -> auto-fix on failure (up to 3 retries). Multi-candidate mode (`-n`) requests JSON array and presents selection UI.
+**Entry flow:** `main.rs` parses CLI args (clap) -> dispatches to subcommands (fix, chat, config, clear-cache, explain, history, completions, init) or main translate flow -> calls LLM (with retry/backoff, API-level JSON mode) -> parses response (multi-level fallback: JSON > embedded JSON > structural regex > backtick) -> injection scan -> danger classification -> user prompt -> execute -> auto-fix on failure (up to 3 retries). Multi-candidate mode (`-n`) requests JSON array and presents selection UI. Eval mode (`--eval`) writes confirmed command to `~/.piz/eval_command` for shell wrapper to eval. `piz init <shell>` generates shell wrapper functions (bash/zsh/fish/PowerShell) enabling cd/export/source to work in the current shell.
 
 **LLM abstraction:** `src/llm/mod.rs` defines the `LlmBackend` trait with `chat()` and `chat_with_history()` methods. Four implementations: `openai.rs`, `claude.rs`, `gemini.rs`, `ollama.rs`. All backends have unified temperature (0.1), max_tokens (2048), and retry with exponential backoff for 429/5xx errors. Factory function `create_backend()` instantiates the correct backend from config. OpenAI backend also serves 12+ compatible providers via `base_url`.
 
@@ -33,6 +33,10 @@ Requires Rust 1.70+. On Windows: MinGW-w64 or MSVC toolchain.
 **Cache:** SQLite with SHA256 keys, configurable TTL, LRU eviction (`cache_max_entries`), expired entry cleanup on open. Also stores execution history for `piz history` subcommand.
 
 **Chat:** `src/chat.rs` — multi-turn interactive mode with `chat_with_history()`, slash commands (/help, /clear, /history), persistent history to `~/.piz/chat_history.json`.
+
+**Shell Integration:** `src/shell_init.rs` — generates shell wrapper functions for bash/zsh/fish/PowerShell via `piz init <shell>`. The wrapper calls piz with `--eval`, which writes the confirmed command to `~/.piz/eval_command` for the wrapper to eval, enabling cd/export/source to affect the current shell.
+
+**Encoding:** Non-invasive approach — no `[Console]::OutputEncoding = UTF8` or `chcp 65001` prefixes are injected. Instead, `decode_output()` uses GBK fallback for Windows console output. Zero modification to user's shell environment.
 
 **Config:** TOML at `~/.piz/config.toml`. Interactive setup wizard in `config.rs` with 12 provider presets. First run auto-triggers the wizard. Supports `--show` (masked keys) and `--reset`.
 

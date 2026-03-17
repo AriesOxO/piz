@@ -32,7 +32,7 @@ Thank you for your interest in contributing to piz! This document provides guide
 ```bash
 cargo build            # Debug build
 cargo build --release  # Release build
-cargo test             # Run all tests (157 tests)
+cargo test             # Run all tests (174 tests)
 cargo fmt --all -- --check  # Check formatting
 cargo clippy -- -D warnings # Lint check
 ```
@@ -111,7 +111,17 @@ src/
 ├── fix.rs           # Fix mode + auto-fix retry loop
 ├── chat.rs          # Interactive chat mode (slash commands + persistent history)
 ├── history.rs       # Shell history reader
+├── shell_init.rs    # Shell integration code generation (bash/zsh/fish/PowerShell)
 └── ui.rs            # Terminal output (spinner, diff, colors)
+```
+
+### Manual Test Scripts
+
+```
+tests/
+├── manual/
+│   ├── test_scenarios.ps1   # 25 complex scenario tests (PowerShell)
+│   └── test_scenarios.sh    # 25 complex scenario tests (bash)
 ```
 
 ### Adding a New LLM Backend
