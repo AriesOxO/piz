@@ -88,7 +88,12 @@ fn default_ollama_model() -> String {
 }
 
 pub fn piz_dir() -> Result<PathBuf> {
-    let home = dirs::home_dir().context("Cannot determine home directory")?;
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map(PathBuf::from)
+        .ok()
+        .or_else(|| dirs::home_dir())
+        .context("Cannot determine home directory")?;
     Ok(home.join(".piz"))
 }
 
