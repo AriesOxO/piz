@@ -513,10 +513,12 @@ piz/
 │   ├── fix.rs           # 命令纠错模式 + 自动修复重试循环
 │   ├── chat.rs          # 交互式对话模式（斜杠命令 + 历史持久化）
 │   ├── history.rs       # Shell 历史记录读取
-│   ├── shell_init.rs    # Shell 集成代码生成（bash/zsh/fish/PowerShell）
+│   ├── shell_init.rs    # Shell 集成代码生成（bash/zsh/fish/PowerShell）+ 内置别名
 │   └── ui.rs            # 终端输出格式化（Spinner、Diff、着色）
 ├── tests/
 │   └── integration.rs   # 集成测试
+├── homebrew/
+│   └── piz.rb           # Homebrew formula 模板（发版时自动渲染）
 ├── install.sh           # macOS/Linux 安装脚本
 └── install.ps1          # Windows 安装脚本
 ```
@@ -529,7 +531,7 @@ git clone https://github.com/AriesOxO/piz.git
 cd piz
 
 cargo build --release      # 构建
-cargo test                 # 运行测试（174 个）
+cargo test                 # 运行测试（190 个）
 cargo install --path .     # 安装到 PATH
 ```
 

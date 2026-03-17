@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-piz is a Rust CLI tool that translates natural language into shell commands using LLM backends (OpenAI-compatible, Claude, Gemini, Ollama). It includes security layers (injection detection with i18n, danger classification), SQLite caching with LRU eviction, multi-language UI (zh/en), interactive chat mode, multi-candidate selection, execution history, shell completions, pipe mode, shell integration (`piz init`), eval mode (`--eval`), non-invasive encoding (GBK decode fallback, no shell environment modification), and auto-fix on command failure with retry.
+piz is a Rust CLI tool that translates natural language into shell commands using LLM backends (OpenAI-compatible, Claude, Gemini, Ollama). It includes security layers (injection detection with i18n, danger classification), SQLite caching with LRU eviction, multi-language UI (zh/en), interactive chat mode, multi-candidate selection, execution history, shell completions, pipe mode, shell integration (`piz init`) with built-in aliases (`p`/`pf`/`pc`), eval mode (`--eval`), non-invasive encoding (GBK decode fallback, no shell environment modification), auto-fix on command failure with retry, and Homebrew tap support (`brew install AriesOxO/tap/piz`).
 
 ## Build & Development Commands
 
 ```bash
 cargo build                # Debug build
 cargo build --release      # Release build
-cargo test                 # Run all tests (177 tests: 169 unit + 8 integration)
+cargo test                 # Run all tests (190 tests: 180 unit + 10 integration)
 cargo test <test_name>     # Run a single test by name
 cargo fmt --all -- --check # Check formatting
 cargo clippy -- -D warnings # Lint (CI treats warnings as errors)
@@ -34,11 +34,15 @@ Requires Rust 1.70+. On Windows: MinGW-w64 or MSVC toolchain.
 
 **Chat:** `src/chat.rs` — multi-turn interactive mode with `chat_with_history()`, slash commands (/help, /clear, /history), persistent history to `~/.piz/chat_history.json`.
 
-**Shell Integration:** `src/shell_init.rs` — generates shell wrapper functions for bash/zsh/fish/PowerShell via `piz init <shell>`. The wrapper calls piz with `--eval`, which writes the confirmed command to `~/.piz/eval_command` for the wrapper to eval, enabling cd/export/source to affect the current shell.
+**Shell Integration:** `src/shell_init.rs` — generates shell wrapper functions for bash/zsh/fish/PowerShell via `piz init <shell>`. The wrapper calls piz with `--eval`, which writes the confirmed command to `~/.piz/eval_command` for the wrapper to eval, enabling cd/export/source to affect the current shell. Also generates built-in aliases: `p` (piz), `pf` (piz fix), `pc` (piz chat).
 
 **Encoding:** Non-invasive approach — no `[Console]::OutputEncoding = UTF8` or `chcp 65001` prefixes are injected. Instead, `decode_output()` uses GBK fallback for Windows console output. Zero modification to user's shell environment.
 
-**Config:** TOML at `~/.piz/config.toml`. Interactive setup wizard in `config.rs` with 12 provider presets. First run auto-triggers the wizard. Supports `--show` (masked keys) and `--reset`.
+**Config:** TOML at `~/.piz/config.toml`. Interactive setup wizard in `config.rs` with 12 provider presets. First run auto-triggers the wizard. Supports `--show` (masked keys, default), `--raw` (unmasked keys), and `--reset`. `--raw` takes priority over `--show`.
+
+**OpenAI URL normalization:** `src/llm/openai.rs` `build_url()` handles three `base_url` forms: plain domain (`https://api.example.com` → appends `/v1/chat/completions`), `/v1` suffix (keeps as-is, appends `/chat/completions`), full endpoint (returns as-is). Prevents `/v1/v1/...` duplication. Temperature compatibility: omits temperature for models that don't support it (e.g. kimi-k2.5), with automatic 400-error retry without temperature.
+
+**Homebrew:** `homebrew/piz.rb` is a formula template with `${VERSION}` and `${SHA256_*}` placeholders. The release workflow (`release.yml` `update-homebrew` job) computes SHA256 checksums from build artifacts and pushes the rendered formula to `AriesOxO/homebrew-tap`. Requires `TAP_GITHUB_TOKEN` secret (classic PAT with `repo` scope).
 
 ## Key Conventions
 

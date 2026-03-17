@@ -511,10 +511,12 @@ piz/
 │   ├── fix.rs           # Command fix mode + auto-fix retry loop
 │   ├── chat.rs          # Interactive chat mode with slash commands + persistent history
 │   ├── history.rs       # Shell history reader
-│   ├── shell_init.rs    # Shell integration code generation (bash/zsh/fish/PowerShell)
+│   ├── shell_init.rs    # Shell integration code generation (bash/zsh/fish/PowerShell) + built-in aliases
 │   └── ui.rs            # Terminal output formatting (spinner, diff, colors)
 ├── tests/
 │   └── integration.rs   # Integration tests
+├── homebrew/
+│   └── piz.rb           # Homebrew formula template (auto-rendered by release workflow)
 ├── install.sh           # macOS/Linux installer
 └── install.ps1          # Windows installer
 ```
@@ -527,7 +529,7 @@ git clone https://github.com/AriesOxO/piz.git
 cd piz
 
 cargo build --release      # Build
-cargo test                 # Run tests (174)
+cargo test                 # Run tests (190)
 cargo install --path .     # Install to PATH
 ```
 
