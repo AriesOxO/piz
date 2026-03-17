@@ -50,24 +50,17 @@ impl OllamaBackend {
                     .ok_or_else(|| anyhow::anyhow!("Unexpected Ollama response format"));
             }
 
-            if super::should_retry(status) && attempt + 1 < super::MAX_RETRIES {
-                super::backoff_delay(attempt).await;
-                last_err = Some(format!(
-                    "Ollama API error ({}): {}",
-                    status,
-                    text.chars().take(500).collect::<String>()
-                ));
-                continue;
+            match super::handle_error_response(status, &text, attempt, "Ollama") {
+                Ok(msg) => {
+                    last_err = Some(msg);
+                    super::backoff_delay(attempt).await;
+                    continue;
+                }
+                Err(e) => return Err(e),
             }
-
-            let preview: String = text.chars().take(500).collect();
-            anyhow::bail!("Ollama API error ({}): {}", status, preview);
         }
 
-        anyhow::bail!(
-            "{}",
-            last_err.unwrap_or_else(|| "Ollama request failed".into())
-        )
+        Err(super::bail_last_err(last_err, "Ollama request failed"))
     }
 }
 

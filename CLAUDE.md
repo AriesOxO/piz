@@ -11,7 +11,7 @@ piz is a Rust CLI tool that translates natural language into shell commands usin
 ```bash
 cargo build                # Debug build
 cargo build --release      # Release build
-cargo test                 # Run all tests (174 tests: 166 unit + 8 integration)
+cargo test                 # Run all tests (177 tests: 169 unit + 8 integration)
 cargo test <test_name>     # Run a single test by name
 cargo fmt --all -- --check # Check formatting
 cargo clippy -- -D warnings # Lint (CI treats warnings as errors)
@@ -27,7 +27,7 @@ Requires Rust 1.70+. On Windows: MinGW-w64 or MSVC toolchain.
 
 **Security (3 layers):**
 1. Prompt-level refusal — LLM returns `{"refuse": true}` for non-command input
-2. Injection detection (`danger.rs`) — local regex scan with `InjectionReason` enum (9 variants), i18n messages, blocks malicious patterns. Cached commands are re-validated on retrieval.
+2. Injection detection (`danger.rs`) — local regex scan with `InjectionReason` enum (12 variants), i18n messages, blocks malicious patterns. Cached commands are re-validated on retrieval.
 3. Danger classification — regex patterns + LLM-provided level -> Safe/Warning/Dangerous
 
 **Cache:** SQLite with SHA256 keys, configurable TTL, LRU eviction (`cache_max_entries`), expired entry cleanup on open. Also stores execution history for `piz history` subcommand.

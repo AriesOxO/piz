@@ -103,6 +103,9 @@ pub struct T {
     pub inject_crontab_modify: &'static str,
     pub inject_download_execute: &'static str,
     pub inject_config_file_attack: &'static str,
+    pub inject_ld_preload: &'static str,
+    pub inject_histfile_suppression: &'static str,
+    pub inject_proc_subst_redirect: &'static str,
 }
 
 pub fn t(lang: Lang) -> &'static T {
@@ -184,6 +187,9 @@ static ZH: T = T {
     inject_crontab_modify: "可疑：通过管道修改 crontab",
     inject_download_execute: "可疑：下载-执行链检测到",
     inject_config_file_attack: "可疑：curl 使用配置文件可能读取敏感数据",
+    inject_ld_preload: "可疑：LD_PRELOAD 可能用于劫持共享库",
+    inject_histfile_suppression: "可疑：禁用命令历史记录以隐藏操作",
+    inject_proc_subst_redirect: "可疑：通过进程替换重定向到远程主机",
 };
 
 static EN: T = T {
@@ -258,6 +264,9 @@ static EN: T = T {
     inject_crontab_modify: "Suspicious: modifying crontab via pipe",
     inject_download_execute: "Suspicious: download-execute chain detected",
     inject_config_file_attack: "Suspicious: curl with config file may read sensitive data",
+    inject_ld_preload: "Suspicious: LD_PRELOAD may be used to hijack shared libraries",
+    inject_histfile_suppression: "Suspicious: disabling command history to hide activity",
+    inject_proc_subst_redirect: "Suspicious: process substitution redirect to remote host",
 };
 
 #[cfg(test)]
@@ -447,6 +456,21 @@ mod tests {
             assert!(
                 !tr.inject_config_file_attack.is_empty(),
                 "{:?}: inject_config_file_attack",
+                lang
+            );
+            assert!(
+                !tr.inject_ld_preload.is_empty(),
+                "{:?}: inject_ld_preload",
+                lang
+            );
+            assert!(
+                !tr.inject_histfile_suppression.is_empty(),
+                "{:?}: inject_histfile_suppression",
+                lang
+            );
+            assert!(
+                !tr.inject_proc_subst_redirect.is_empty(),
+                "{:?}: inject_proc_subst_redirect",
                 lang
             );
         }

@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [0.2.5] - 2026-03-17
+
+### Added / 新增
+- New injection detection patterns: `LD_PRELOAD` exploitation, `HISTFILE` suppression, process substitution redirection (`3<>`)
+- 新增注入检测模式：`LD_PRELOAD` 利用、`HISTFILE` 抑制、进程替换重定向（`3<>`）
+- Security policy (`SECURITY.md`), Code of Conduct, PR template for open-source governance
+- 添加安全策略（`SECURITY.md`）、行为准则、PR 模板，完善开源治理
+- CI: security audit (`cargo-audit`) and MSRV (1.70) verification
+- CI：安全审计（`cargo-audit`）和最低 Rust 版本（1.70）验证
+
+### Fixed / 修复
+- Extracted common retry/error handling helpers in LLM backends, reducing code duplication
+- 提取 LLM 后端通用重试/错误处理辅助函数，减少代码重复
+- Improved error handling in chat history loading and update state (no longer silently swallows errors)
+- 改善聊天历史加载和更新状态的错误处理（不再静默吞掉错误）
+- Fixed `is_multiple_of` usage for MSRV 1.70 compatibility
+- 修复 `is_multiple_of` 用法以兼容 MSRV 1.70
+- Removed reference to non-existent `tests/manual/` directory in CONTRIBUTING.md
+- 移除 CONTRIBUTING.md 中对不存在的 `tests/manual/` 目录的引用
+
 ## [0.2.3] - 2026-03-17
 
 ### Added / 新增

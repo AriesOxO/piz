@@ -115,15 +115,6 @@ src/
 └── ui.rs            # Terminal output (spinner, diff, colors)
 ```
 
-### Manual Test Scripts
-
-```
-tests/
-├── manual/
-│   ├── test_scenarios.ps1   # 25 complex scenario tests (PowerShell)
-│   └── test_scenarios.sh    # 25 complex scenario tests (bash)
-```
-
 ### Adding a New LLM Backend
 
 1. Create `src/llm/your_backend.rs`

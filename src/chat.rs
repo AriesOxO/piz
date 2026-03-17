@@ -17,14 +17,20 @@ fn chat_history_path() -> Result<std::path::PathBuf> {
 fn load_chat_history() -> Vec<Message> {
     let path = match chat_history_path() {
         Ok(p) => p,
-        Err(_) => return Vec::new(),
+        Err(e) => {
+            eprintln!("[warn] Failed to resolve chat history path: {}", e);
+            return Vec::new();
+        }
     };
     if !path.exists() {
         return Vec::new();
     }
     match std::fs::read_to_string(&path) {
         Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
-        Err(_) => Vec::new(),
+        Err(e) => {
+            eprintln!("[warn] Failed to read chat history: {}", e);
+            Vec::new()
+        }
     }
 }
 
@@ -116,11 +122,8 @@ pub async fn run_chat(
         if history.len() > max_history {
             let excess = history.len() - max_history;
             // Round up to even number to preserve user/assistant pairing
-            let drain_count = if excess.is_multiple_of(2) {
-                excess
-            } else {
-                excess + 1
-            };
+            #[allow(clippy::manual_is_multiple_of)] // MSRV 1.70 compat
+            let drain_count = if excess % 2 == 0 { excess } else { excess + 1 };
             let drain_count = drain_count.min(history.len() - 1);
             history.drain(..drain_count);
         }

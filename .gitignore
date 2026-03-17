@@ -14,6 +14,10 @@
 .DS_Store
 Thumbs.db
 
+# Rust backup files
+**/*.rs.bk
+*.orig
+
 # Docs (local analysis, not tracked)
 docs/
 

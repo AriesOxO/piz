@@ -51,6 +51,41 @@ pub trait LlmBackend: Send + Sync {
     async fn chat_with_history(&self, system: &str, messages: &[Message]) -> Result<String>;
 }
 
+/// Truncate a string to at most 500 characters for error preview
+pub(crate) fn truncate_preview(text: &str) -> String {
+    text.chars().take(500).collect()
+}
+
+/// Handle a non-success HTTP response: decide whether to retry or fail.
+/// Returns `Ok(msg)` if should retry (msg is the error description for last_err),
+/// or `Err(e)` if should bail immediately.
+pub(crate) fn handle_error_response(
+    status: reqwest::StatusCode,
+    text: &str,
+    attempt: u32,
+    backend_name: &str,
+) -> std::result::Result<String, anyhow::Error> {
+    let preview = truncate_preview(text);
+    if should_retry(status) && attempt + 1 < MAX_RETRIES {
+        Ok(format!(
+            "{} API error ({}): {}",
+            backend_name, status, preview
+        ))
+    } else {
+        Err(anyhow::anyhow!(
+            "{} API error ({}): {}",
+            backend_name,
+            status,
+            preview
+        ))
+    }
+}
+
+/// Build a final bail error from the last retry error message
+pub(crate) fn bail_last_err(last_err: Option<String>, default_msg: &str) -> anyhow::Error {
+    anyhow::anyhow!("{}", last_err.unwrap_or_else(|| default_msg.into()))
+}
+
 /// Create a shared reqwest::Client with timeout configured
 pub(crate) fn build_http_client() -> reqwest::Client {
     reqwest::Client::builder()

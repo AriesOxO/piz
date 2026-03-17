@@ -30,11 +30,17 @@ fn state_path() -> Result<std::path::PathBuf> {
 }
 
 fn load_state() -> UpdateState {
-    state_path()
-        .ok()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+    let path = match state_path() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[warn] Failed to resolve update state path: {}", e);
+            return UpdateState::default();
+        }
+    };
+    match std::fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Err(_) => UpdateState::default(), // File may not exist yet, this is expected
+    }
 }
 
 fn save_state(state: &UpdateState) {
