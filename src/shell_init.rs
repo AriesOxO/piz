@@ -98,7 +98,7 @@ fn generate_powershell(eval_path: &str) -> String {
     format!(
         r#"# piz shell integration (PowerShell)
 # Add to your $PROFILE:
-#   Invoke-Expression (& piz init powershell)
+#   piz init powershell | Out-String | Invoke-Expression
 
 function Invoke-Piz {{
   param([Parameter(ValueFromRemainingArguments)][string[]]$Args)
@@ -138,7 +138,7 @@ REM Use piz normally — most commands work in subprocess mode.
 REM For cd commands, copy the output and run manually.
 REM
 REM Consider using PowerShell for full shell integration:
-REM   Invoke-Expression (& piz init powershell)
+REM   piz init powershell | Out-String | Invoke-Expression
 "#
     .to_string()
 }

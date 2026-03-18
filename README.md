@@ -229,7 +229,7 @@ piz init fish | source
 
 ```powershell
 # Add to $PROFILE:
-Invoke-Expression (piz init powershell | Out-String)
+piz init powershell | Out-String | Invoke-Expression
 ```
 
 Once set up, piz will use `--eval` mode automatically, and commands like `cd`, `export`, `source` will take effect in your current shell.

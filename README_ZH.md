@@ -231,7 +231,7 @@ piz init fish | source
 
 ```powershell
 # 添加到 $PROFILE：
-Invoke-Expression (piz init powershell | Out-String)
+piz init powershell | Out-String | Invoke-Expression
 ```
 
 配置完成后，piz 会自动使用 `--eval` 模式，`cd`、`export`、`source` 等命令将在当前 Shell 中正确生效。

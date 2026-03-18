@@ -162,9 +162,9 @@ Write-Host '  预期: 报错 Unsupported shell' -ForegroundColor Green
 Write-Host "`n=== 7. Shell 集成 E2E 测试 ===" -ForegroundColor Yellow
 
 Write-Host "`n[7.1] 加载 shell 集成:"
-Write-Host '  运行: Invoke-Expression (& piz init powershell)' -ForegroundColor Gray
+Write-Host '  运行: piz init powershell | Out-String | Invoke-Expression' -ForegroundColor Gray
 Write-Host '  预期: 无报错，piz 别名生效' -ForegroundColor Green
-# Invoke-Expression (& .\piz.exe init powershell)
+# .\piz.exe init powershell | Out-String | Invoke-Expression
 
 Write-Host "`n[7.2] cd 命令真正生效:"
 Write-Host '  运行:' -ForegroundColor Gray
