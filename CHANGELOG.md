@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [0.3.1] - 2026-03-18
+
+### Fixed / 修复
+
+- PowerShell init syntax: changed `Invoke-Expression (piz init powershell | Out-String)` to pipeline style `piz init powershell | Out-String | Invoke-Expression` for better compatibility
+- PowerShell 初始化语法：将 `Invoke-Expression (piz init powershell | Out-String)` 改为管道风格 `piz init powershell | Out-String | Invoke-Expression`，提升兼容性
+
+### Added / 新增
+
+- VHS tape demo scripts for basic, explain, and multi-candidate modes
+- VHS tape 演示脚本，覆盖基础、解释和多候选模式
+
 ## [0.3.0] - 2026-03-17
 
 ### Added / 新增
