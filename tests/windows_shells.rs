@@ -1,3 +1,4 @@
+#![cfg(target_os = "windows")]
 //! Windows 真实环境跨 Shell 测试
 //!
 //! 覆盖场景：
