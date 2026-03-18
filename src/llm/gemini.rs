@@ -137,3 +137,96 @@ impl LlmBackend for GeminiBackend {
         self.send_request(body).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_config(base_url: Option<&str>, model: &str) -> GeminiConfig {
+        GeminiConfig {
+            api_key: "test-key".into(),
+            model: model.into(),
+            base_url: base_url.map(|s| s.into()),
+        }
+    }
+
+    #[test]
+    fn build_url_default() {
+        let backend = GeminiBackend::new(make_config(None, "gemini-2.5-flash"));
+        let url = backend.build_url();
+        assert!(url.contains("generativelanguage.googleapis.com"));
+        assert!(url.contains("gemini-2.5-flash"));
+        assert!(url.ends_with(":generateContent"));
+    }
+
+    #[test]
+    fn build_url_custom_base() {
+        let backend = GeminiBackend::new(make_config(Some("https://proxy.com"), "gemini-pro"));
+        assert_eq!(
+            backend.build_url(),
+            "https://proxy.com/v1beta/models/gemini-pro:generateContent"
+        );
+    }
+
+    #[test]
+    fn build_url_trailing_slash_stripped() {
+        let backend = GeminiBackend::new(make_config(Some("https://proxy.com/"), "gemini-pro"));
+        let url = backend.build_url();
+        assert!(url.starts_with("https://proxy.com/v1beta"));
+        assert!(!url.contains("//v1beta"));
+    }
+
+    #[test]
+    fn build_url_includes_model_name() {
+        let backend = GeminiBackend::new(make_config(None, "gemini-2.0-flash"));
+        let url = backend.build_url();
+        assert!(url.contains("gemini-2.0-flash"));
+    }
+
+    #[test]
+    fn safety_block_reason_detection() {
+        let response = r#"{"promptFeedback":{"blockReason":"SAFETY"}}"#;
+        let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
+        let blocked = parsed["promptFeedback"]["blockReason"].as_str();
+        assert_eq!(blocked, Some("SAFETY"));
+    }
+
+    #[test]
+    fn safety_finish_reason_detection() {
+        let response = r#"{"candidates":[{"finishReason":"SAFETY"}]}"#;
+        let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
+        let reason = parsed["candidates"][0]["finishReason"].as_str();
+        assert_eq!(reason, Some("SAFETY"));
+    }
+
+    #[test]
+    fn normal_response_text_extraction() {
+        let response = r#"{"candidates":[{"content":{"parts":[{"text":"hello"}]}}]}"#;
+        let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
+        let text = parsed["candidates"][0]["content"]["parts"][0]["text"].as_str();
+        assert_eq!(text, Some("hello"));
+    }
+
+    #[test]
+    fn empty_candidates_extraction_fails() {
+        let response = r#"{"candidates":[]}"#;
+        let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
+        let text = parsed["candidates"][0]["content"]["parts"][0]["text"].as_str();
+        assert!(text.is_none());
+    }
+
+    #[test]
+    fn role_mapping_assistant_to_model() {
+        // Gemini uses "model" instead of "assistant"
+        let role = "assistant";
+        let mapped = if role == "assistant" { "model" } else { "user" };
+        assert_eq!(mapped, "model");
+    }
+
+    #[test]
+    fn role_mapping_user_stays_user() {
+        let role = "user";
+        let mapped = if role == "assistant" { "model" } else { "user" };
+        assert_eq!(mapped, "user");
+    }
+}

@@ -335,4 +335,40 @@ mod tests {
         let (_, cmd, _) = parse_fix_response(input).unwrap();
         assert!(cmd.contains(r"C:\Users\test"));
     }
+
+    // ── Additional fix response parsing ──
+
+    #[test]
+    fn parse_fix_markdown_wrapped_json() {
+        let input = "Here's the fix:\n```json\n{\"diagnosis\": \"missing deps\", \"command\": \"npm install\", \"danger\": \"safe\"}\n```";
+        let (diag, cmd, danger) = parse_fix_response(input).unwrap();
+        assert_eq!(diag, "missing deps");
+        assert_eq!(cmd, "npm install");
+        assert_eq!(danger, DangerLevel::Safe);
+    }
+
+    #[test]
+    fn parse_fix_empty_response_errors() {
+        assert!(parse_fix_response("").is_err());
+    }
+
+    #[test]
+    fn parse_fix_whitespace_only_errors() {
+        assert!(parse_fix_response("   \n  ").is_err());
+    }
+
+    #[test]
+    fn parse_fix_empty_diagnosis_with_valid_command() {
+        let input = r#"{"diagnosis": "", "command": "ls", "danger": "safe"}"#;
+        let (diag, cmd, _) = parse_fix_response(input).unwrap();
+        assert!(diag.is_empty());
+        assert_eq!(cmd, "ls");
+    }
+
+    #[test]
+    fn parse_fix_warning_level() {
+        let input = r#"{"diagnosis": "needs sudo", "command": "sudo apt install gcc", "danger": "warning"}"#;
+        let (_, _, danger) = parse_fix_response(input).unwrap();
+        assert_eq!(danger, DangerLevel::Warning);
+    }
 }

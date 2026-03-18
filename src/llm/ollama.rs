@@ -101,3 +101,55 @@ impl LlmBackend for OllamaBackend {
         self.send_request(body).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_config(host: &str) -> OllamaConfig {
+        OllamaConfig {
+            host: host.into(),
+            model: "llama3".into(),
+        }
+    }
+
+    #[test]
+    fn build_url_default() {
+        let backend = OllamaBackend::new(make_config("http://localhost:11434"));
+        assert_eq!(backend.build_url(), "http://localhost:11434/api/chat");
+    }
+
+    #[test]
+    fn build_url_trailing_slash() {
+        let backend = OllamaBackend::new(make_config("http://localhost:11434/"));
+        assert_eq!(backend.build_url(), "http://localhost:11434/api/chat");
+    }
+
+    #[test]
+    fn build_url_custom_host() {
+        let backend = OllamaBackend::new(make_config("http://192.168.1.100:11434"));
+        assert_eq!(backend.build_url(), "http://192.168.1.100:11434/api/chat");
+    }
+
+    #[test]
+    fn response_content_extraction() {
+        let response = r#"{"message":{"content":"echo hello"}}"#;
+        let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
+        let content = parsed["message"]["content"].as_str();
+        assert_eq!(content, Some("echo hello"));
+    }
+
+    #[test]
+    fn response_missing_content_is_none() {
+        let response = r#"{"message":{}}"#;
+        let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
+        let content = parsed["message"]["content"].as_str();
+        assert!(content.is_none());
+    }
+
+    #[test]
+    fn config_model_preserved() {
+        let backend = OllamaBackend::new(make_config("http://localhost:11434"));
+        assert_eq!(backend.config.model, "llama3");
+    }
+}

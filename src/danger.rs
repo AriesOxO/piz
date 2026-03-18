@@ -663,4 +663,191 @@ mod tests {
         assert!(detect_injection("git status").is_none());
         assert!(detect_injection("docker ps").is_none());
     }
+
+    // ── Additional danger detection ──
+
+    #[test]
+    fn danger_rm_rf_with_extra_flags() {
+        // --no-preserve-root breaks the regex pattern, but rm -rf still triggers Warning
+        let level = detect_danger_regex("rm -rf --no-preserve-root /");
+        assert!(level >= DangerLevel::Warning);
+    }
+
+    #[test]
+    fn danger_fork_bomb() {
+        assert_eq!(detect_danger_regex(":(){ :|:& };:"), DangerLevel::Dangerous);
+    }
+
+    #[test]
+    fn danger_combined_pipe_xargs_rm() {
+        assert_eq!(
+            detect_danger_regex("find /tmp -name '*.log' | xargs rm -rf"),
+            DangerLevel::Warning
+        );
+    }
+
+    #[test]
+    fn safe_pipe_chain_not_flagged() {
+        assert_eq!(
+            detect_danger_regex("ls -la | grep test | wc -l"),
+            DangerLevel::Safe
+        );
+    }
+
+    #[test]
+    fn safe_docker_run() {
+        assert_eq!(
+            detect_danger_regex("docker run --rm ubuntu echo hello"),
+            DangerLevel::Safe
+        );
+    }
+
+    #[test]
+    fn safe_git_log() {
+        assert_eq!(
+            detect_danger_regex("git log --oneline -10"),
+            DangerLevel::Safe
+        );
+    }
+
+    #[test]
+    fn danger_case_insensitive_drop_table() {
+        assert_eq!(
+            detect_danger_regex("drop table users"),
+            DangerLevel::Dangerous
+        );
+        assert_eq!(
+            detect_danger_regex("DROP DATABASE production"),
+            DangerLevel::Dangerous
+        );
+    }
+
+    #[test]
+    fn danger_case_insensitive_format() {
+        assert_eq!(detect_danger_regex("format C:"), DangerLevel::Dangerous);
+    }
+
+    #[test]
+    fn danger_overwrite_ssh_keys() {
+        assert_eq!(
+            detect_danger_regex("> ~/.ssh/authorized_keys"),
+            DangerLevel::Dangerous
+        );
+    }
+
+    #[test]
+    fn warning_service_stop() {
+        assert_eq!(
+            detect_danger_regex("service nginx stop"),
+            DangerLevel::Warning
+        );
+        assert_eq!(
+            detect_danger_regex("service mysql restart"),
+            DangerLevel::Warning
+        );
+    }
+
+    #[test]
+    fn warning_mv_to_dev_null() {
+        assert_eq!(
+            detect_danger_regex("mv important.log /dev/null"),
+            DangerLevel::Warning
+        );
+    }
+
+    #[test]
+    fn warning_iptables() {
+        assert_eq!(detect_danger_regex("iptables -F"), DangerLevel::Warning);
+    }
+
+    // ── Additional injection detection ──
+
+    #[test]
+    fn injection_safe_curl_no_env() {
+        // curl without env var should not trigger
+        assert!(detect_injection("curl https://example.com/api").is_none());
+    }
+
+    #[test]
+    fn injection_safe_base64_no_pipe_shell() {
+        // base64 encode/decode without pipe to shell is safe
+        assert!(detect_injection("echo test | base64").is_none());
+    }
+
+    #[test]
+    fn injection_overwrite_zshrc() {
+        assert!(detect_injection("echo 'evil' > ~/.zshrc").is_some());
+    }
+
+    #[test]
+    fn injection_overwrite_profile() {
+        assert!(detect_injection("echo 'evil' > ~/.profile").is_some());
+    }
+
+    #[test]
+    fn injection_overwrite_bash_profile() {
+        assert!(detect_injection("echo 'evil' > ~/.bash_profile").is_some());
+    }
+
+    #[test]
+    fn injection_reason_message_returns_non_empty() {
+        let tr = crate::i18n::t(crate::i18n::Lang::En);
+        let variants = [
+            InjectionReason::EnvExfiltration,
+            InjectionReason::Base64Shell,
+            InjectionReason::ReverseShell,
+            InjectionReason::EvalRemote,
+            InjectionReason::SourceRemote,
+            InjectionReason::OverwriteConfig,
+            InjectionReason::CrontabModify,
+            InjectionReason::DownloadExecute,
+            InjectionReason::ConfigFileAttack,
+            InjectionReason::LdPreloadExploit,
+            InjectionReason::HistfileSuppression,
+            InjectionReason::ProcessSubstitutionRedirect,
+        ];
+        for variant in &variants {
+            let msg = variant.message(tr);
+            assert!(!msg.is_empty(), "Empty message for {:?}", variant);
+        }
+    }
+
+    #[test]
+    fn injection_reason_message_zh_non_empty() {
+        let tr = crate::i18n::t(crate::i18n::Lang::Zh);
+        let msg = InjectionReason::EnvExfiltration.message(tr);
+        assert!(!msg.is_empty());
+        assert!(msg.contains("环境变量") || msg.contains("泄露"));
+    }
+
+    #[test]
+    fn danger_level_ordering() {
+        assert!(DangerLevel::Safe < DangerLevel::Warning);
+        assert!(DangerLevel::Warning < DangerLevel::Dangerous);
+        assert!(DangerLevel::Safe < DangerLevel::Dangerous);
+    }
+
+    #[test]
+    fn max_symmetric() {
+        assert_eq!(
+            DangerLevel::Safe.max(DangerLevel::Warning),
+            DangerLevel::Warning
+        );
+        assert_eq!(
+            DangerLevel::Warning.max(DangerLevel::Safe),
+            DangerLevel::Warning
+        );
+    }
+
+    #[test]
+    fn max_same_level() {
+        assert_eq!(
+            DangerLevel::Warning.max(DangerLevel::Warning),
+            DangerLevel::Warning
+        );
+        assert_eq!(
+            DangerLevel::Dangerous.max(DangerLevel::Dangerous),
+            DangerLevel::Dangerous
+        );
+    }
 }

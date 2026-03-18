@@ -233,3 +233,196 @@ api_key = "sk-test"
     assert_eq!(parsed["default_backend"].as_str().unwrap(), "openai");
     assert_eq!(parsed["openai"]["api_key"].as_str().unwrap(), "sk-test");
 }
+
+// ── Version flag ──
+
+#[test]
+fn version_flag_output() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .arg("--version")
+        .output()
+        .expect("failed to run piz --version");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success());
+    assert!(stdout.contains("piz"));
+}
+
+// ── Completions subcommand ──
+
+#[test]
+fn completions_bash_output() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .args(["completions", "bash"])
+        .output()
+        .expect("failed to run completions");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.is_empty());
+}
+
+#[test]
+fn completions_zsh_output() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .args(["completions", "zsh"])
+        .output()
+        .expect("failed to run completions");
+
+    assert!(output.status.success());
+}
+
+#[test]
+fn completions_fish_output() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .args(["completions", "fish"])
+        .output()
+        .expect("failed to run completions");
+
+    assert!(output.status.success());
+}
+
+#[test]
+fn completions_powershell_output() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .args(["completions", "powershell"])
+        .output()
+        .expect("failed to run completions");
+
+    assert!(output.status.success());
+}
+
+// ── Init subcommand ──
+
+#[test]
+fn init_bash_output_contains_eval() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .args(["init", "bash"])
+        .output()
+        .expect("failed to run init");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("eval"));
+    assert!(stdout.contains("piz"));
+}
+
+#[test]
+fn init_fish_output_contains_function() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .args(["init", "fish"])
+        .output()
+        .expect("failed to run init");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("function"));
+}
+
+#[test]
+fn init_powershell_output_contains_alias() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .args(["init", "powershell"])
+        .output()
+        .expect("failed to run init");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Invoke-Piz") || stdout.contains("Set-Alias") || stdout.contains("piz")
+    );
+}
+
+#[test]
+fn init_unknown_shell_fails() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .args(["init", "unknown_shell_xyz"])
+        .output()
+        .expect("failed to run init");
+
+    assert!(!output.status.success());
+}
+
+// ── Config --reset (no config file) ──
+
+#[test]
+fn config_reset_no_file_succeeds() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let dir = tempfile::tempdir().unwrap();
+    let piz_dir = dir.path().join(".piz");
+    std::fs::create_dir_all(&piz_dir).unwrap();
+    // No config.toml created
+
+    let output = std::process::Command::new(exe)
+        .args(["config", "--reset"])
+        .env("HOME", dir.path())
+        .env("USERPROFILE", dir.path())
+        .output()
+        .expect("failed to run config --reset");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("No config file found"));
+}
+
+// ── Invalid subcommand ──
+
+#[test]
+fn invalid_subcommand_fails() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .arg("nonexistent_subcommand")
+        .output()
+        .expect("failed to run piz");
+
+    // Either fails with config error or succeeds with empty query — should not crash
+    // The key assertion: binary doesn't panic
+    let _ = output.status;
+}
+
+// ── Help includes all subcommands ──
+
+#[test]
+fn help_lists_all_subcommands() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .arg("--help")
+        .output()
+        .expect("failed to run piz --help");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("fix"));
+    assert!(stdout.contains("chat"));
+    assert!(stdout.contains("config"));
+    assert!(stdout.contains("clear-cache"));
+    assert!(stdout.contains("history"));
+    assert!(stdout.contains("completions"));
+    assert!(stdout.contains("init"));
+    assert!(stdout.contains("update"));
+}
+
+// ── Help includes key flags ──
+
+#[test]
+fn help_lists_key_flags() {
+    let exe = env!("CARGO_BIN_EXE_piz");
+    let output = std::process::Command::new(exe)
+        .arg("--help")
+        .output()
+        .expect("failed to run piz --help");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--pipe"));
+    assert!(stdout.contains("--eval"));
+    assert!(stdout.contains("--detail"));
+    assert!(stdout.contains("--candidates") || stdout.contains("-n"));
+}

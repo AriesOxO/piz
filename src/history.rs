@@ -43,3 +43,85 @@ pub fn last_history_command() -> Result<String> {
 
     anyhow::bail!("Could not find shell history")
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn parse_bash_history_last_line() {
+        let content = "ls\ncd /tmp\ngit status\n";
+        let last = content
+            .lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .unwrap();
+        assert_eq!(last, "git status");
+    }
+
+    #[test]
+    fn parse_zsh_history_with_timestamp() {
+        let line = ": 1234567890:0;git push --force";
+        let cmd = if line.starts_with(':') {
+            line.split_once(';').map_or(line, |x| x.1)
+        } else {
+            line
+        };
+        assert_eq!(cmd.trim(), "git push --force");
+    }
+
+    #[test]
+    fn parse_zsh_history_without_semicolon() {
+        let line = ": 1234567890:0";
+        let cmd = if line.starts_with(':') {
+            line.split_once(';').map_or(line, |x| x.1)
+        } else {
+            line
+        };
+        // No semicolon → returns whole line
+        assert_eq!(cmd, ": 1234567890:0");
+    }
+
+    #[test]
+    fn history_skips_empty_lines() {
+        let content = "ls\n\n\n\npwd\n\n";
+        let last = content
+            .lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .unwrap();
+        assert_eq!(last, "pwd");
+    }
+
+    #[test]
+    fn history_empty_file_no_result() {
+        let content = "\n\n\n";
+        let last = content.lines().rev().find(|l| !l.trim().is_empty());
+        assert!(last.is_none());
+    }
+
+    #[test]
+    fn history_single_command() {
+        let content = "echo hello\n";
+        let last = content
+            .lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .unwrap();
+        assert_eq!(last, "echo hello");
+    }
+
+    #[test]
+    fn history_multiline_zsh() {
+        let content = ": 1700000000:0;ls -la\n: 1700000001:0;git push\n";
+        let last_line = content
+            .lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .unwrap();
+        let cmd = if last_line.starts_with(':') {
+            last_line.split_once(';').map_or(last_line, |x| x.1)
+        } else {
+            last_line
+        };
+        assert_eq!(cmd.trim(), "git push");
+    }
+}

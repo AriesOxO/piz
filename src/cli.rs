@@ -126,4 +126,175 @@ mod tests {
         assert!(cli.detail);
         assert_eq!(cli.explain.as_deref(), Some("ls -la"));
     }
+
+    // ── subcommands ──
+
+    #[test]
+    fn subcommand_fix() {
+        let cli = Cli::try_parse_from(["piz", "fix"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::Fix)));
+    }
+
+    #[test]
+    fn subcommand_chat() {
+        let cli = Cli::try_parse_from(["piz", "chat"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::Chat)));
+    }
+
+    #[test]
+    fn subcommand_config_show() {
+        let cli = Cli::try_parse_from(["piz", "config", "--show"]).unwrap();
+        if let Some(Commands::Config { show, .. }) = cli.command {
+            assert!(show);
+        } else {
+            panic!("expected Config subcommand");
+        }
+    }
+
+    #[test]
+    fn subcommand_config_raw() {
+        let cli = Cli::try_parse_from(["piz", "config", "--raw"]).unwrap();
+        if let Some(Commands::Config { raw, .. }) = cli.command {
+            assert!(raw);
+        } else {
+            panic!("expected Config subcommand");
+        }
+    }
+
+    #[test]
+    fn subcommand_config_reset() {
+        let cli = Cli::try_parse_from(["piz", "config", "--reset"]).unwrap();
+        if let Some(Commands::Config { reset, .. }) = cli.command {
+            assert!(reset);
+        } else {
+            panic!("expected Config subcommand");
+        }
+    }
+
+    #[test]
+    fn subcommand_config_init() {
+        let cli = Cli::try_parse_from(["piz", "config", "--init"]).unwrap();
+        if let Some(Commands::Config { init, .. }) = cli.command {
+            assert!(init);
+        } else {
+            panic!("expected Config subcommand");
+        }
+    }
+
+    #[test]
+    fn subcommand_clear_cache() {
+        let cli = Cli::try_parse_from(["piz", "clear-cache"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::ClearCache)));
+    }
+
+    #[test]
+    fn subcommand_history_default() {
+        let cli = Cli::try_parse_from(["piz", "history"]).unwrap();
+        if let Some(Commands::History { search, limit }) = cli.command {
+            assert!(search.is_none());
+            assert_eq!(limit, 20);
+        } else {
+            panic!("expected History subcommand");
+        }
+    }
+
+    #[test]
+    fn subcommand_history_with_search() {
+        let cli = Cli::try_parse_from(["piz", "history", "git"]).unwrap();
+        if let Some(Commands::History { search, .. }) = cli.command {
+            assert_eq!(search.as_deref(), Some("git"));
+        } else {
+            panic!("expected History subcommand");
+        }
+    }
+
+    #[test]
+    fn subcommand_history_with_limit() {
+        let cli = Cli::try_parse_from(["piz", "history", "-l", "50"]).unwrap();
+        if let Some(Commands::History { limit, .. }) = cli.command {
+            assert_eq!(limit, 50);
+        } else {
+            panic!("expected History subcommand");
+        }
+    }
+
+    #[test]
+    fn subcommand_init() {
+        let cli = Cli::try_parse_from(["piz", "init", "bash"]).unwrap();
+        if let Some(Commands::Init { shell }) = cli.command {
+            assert_eq!(shell, "bash");
+        } else {
+            panic!("expected Init subcommand");
+        }
+    }
+
+    #[test]
+    fn subcommand_update() {
+        let cli = Cli::try_parse_from(["piz", "update"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::Update)));
+    }
+
+    // ── flags ──
+
+    #[test]
+    fn flag_pipe_mode() {
+        let cli = Cli::try_parse_from(["piz", "--pipe", "list", "files"]).unwrap();
+        assert!(cli.pipe);
+    }
+
+    #[test]
+    fn flag_eval_mode() {
+        let cli = Cli::try_parse_from(["piz", "--eval", "list", "files"]).unwrap();
+        assert!(cli.eval);
+    }
+
+    #[test]
+    fn flag_no_cache() {
+        let cli = Cli::try_parse_from(["piz", "--no-cache", "list", "files"]).unwrap();
+        assert!(cli.no_cache);
+    }
+
+    #[test]
+    fn flag_verbose() {
+        let cli = Cli::try_parse_from(["piz", "--verbose", "list", "files"]).unwrap();
+        assert!(cli.verbose);
+    }
+
+    #[test]
+    fn flag_backend_override() {
+        let cli = Cli::try_parse_from(["piz", "-b", "claude", "list", "files"]).unwrap();
+        assert_eq!(cli.backend.as_deref(), Some("claude"));
+    }
+
+    #[test]
+    fn flag_candidates() {
+        let cli = Cli::try_parse_from(["piz", "-n", "3", "list", "files"]).unwrap();
+        assert_eq!(cli.candidates, 3);
+    }
+
+    #[test]
+    fn candidates_default_is_1() {
+        let cli = Cli::try_parse_from(["piz", "list", "files"]).unwrap();
+        assert_eq!(cli.candidates, 1);
+    }
+
+    #[test]
+    fn flag_explain() {
+        let cli = Cli::try_parse_from(["piz", "-e", "ls -la"]).unwrap();
+        assert_eq!(cli.explain.as_deref(), Some("ls -la"));
+    }
+
+    #[test]
+    fn query_captures_multiple_words() {
+        let cli = Cli::try_parse_from(["piz", "list", "all", "files"]).unwrap();
+        assert_eq!(cli.query, vec!["list", "all", "files"]);
+    }
+
+    #[test]
+    fn no_args_no_panic() {
+        // piz with no args should parse OK (query is empty vec)
+        let cli = Cli::try_parse_from(["piz"]).unwrap();
+        assert!(cli.query.is_empty());
+        assert!(cli.command.is_none());
+    }
 }

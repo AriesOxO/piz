@@ -271,3 +271,146 @@ pub fn load_last_exec() -> Result<LastExec> {
     let last: LastExec = serde_json::from_str(&content)?;
     Ok(last)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── decode_output ──
+
+    #[test]
+    fn decode_valid_utf8() {
+        assert_eq!(decode_output(b"hello world"), "hello world");
+    }
+
+    #[test]
+    fn decode_empty_bytes() {
+        assert_eq!(decode_output(&[]), "");
+    }
+
+    #[test]
+    fn decode_utf8_chinese() {
+        let input = "你好世界".as_bytes();
+        assert_eq!(decode_output(input), "你好世界");
+    }
+
+    #[test]
+    fn decode_invalid_utf8_does_not_panic() {
+        let input = vec![0xFF, 0xFE, 0x41];
+        let result = decode_output(&input);
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn decode_utf8_with_newlines() {
+        assert_eq!(decode_output(b"line1\nline2\n"), "line1\nline2\n");
+    }
+
+    // ── LastExec serialization ──
+
+    #[test]
+    fn last_exec_serialization_roundtrip() {
+        let last = LastExec {
+            command: "echo test".into(),
+            exit_code: 0,
+            stdout: "test\n".into(),
+            stderr: "".into(),
+            timestamp: 1234567890,
+        };
+        let json = serde_json::to_string_pretty(&last).unwrap();
+        let loaded: LastExec = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.command, "echo test");
+        assert_eq!(loaded.exit_code, 0);
+        assert_eq!(loaded.stdout, "test\n");
+        assert_eq!(loaded.stderr, "");
+        assert_eq!(loaded.timestamp, 1234567890);
+    }
+
+    #[test]
+    fn last_exec_has_all_json_fields() {
+        let last = LastExec {
+            command: "ls".into(),
+            exit_code: 1,
+            stdout: "out".into(),
+            stderr: "err".into(),
+            timestamp: 999,
+        };
+        let json = serde_json::to_string(&last).unwrap();
+        assert!(json.contains("\"command\""));
+        assert!(json.contains("\"exit_code\""));
+        assert!(json.contains("\"stdout\""));
+        assert!(json.contains("\"stderr\""));
+        assert!(json.contains("\"timestamp\""));
+    }
+
+    #[test]
+    fn stdout_preview_truncates_at_500_chars() {
+        let long_output: String = "x".repeat(1000);
+        let preview: String = long_output.chars().take(500).collect();
+        assert_eq!(preview.len(), 500);
+    }
+
+    #[test]
+    fn stdout_preview_short_unchanged() {
+        let short = "hello";
+        let preview: String = short.chars().take(500).collect();
+        assert_eq!(preview, "hello");
+    }
+
+    // ── prompt_user auto-confirm shortcut ──
+
+    #[test]
+    fn auto_confirm_safe_returns_execute() {
+        let tr = crate::i18n::t(crate::i18n::Lang::En);
+        let result = prompt_user("echo hi", DangerLevel::Safe, true, tr, None).unwrap();
+        assert!(matches!(result, UserChoice::Execute));
+    }
+
+    #[test]
+    fn auto_confirm_safe_with_explanation() {
+        let tr = crate::i18n::t(crate::i18n::Lang::Zh);
+        let result = prompt_user(
+            "echo hi",
+            DangerLevel::Safe,
+            true,
+            tr,
+            Some("echo: 输出文本"),
+        )
+        .unwrap();
+        assert!(matches!(result, UserChoice::Execute));
+    }
+
+    // ── execute_command ──
+
+    #[test]
+    fn execute_echo_captures_stdout() {
+        let tr = crate::i18n::t(crate::i18n::Lang::En);
+        let (code, stdout, _) = execute_command("echo piz_unit_test", tr).unwrap();
+        assert_eq!(code, 0);
+        assert!(stdout.contains("piz_unit_test"));
+    }
+
+    #[test]
+    fn execute_failing_returns_nonzero() {
+        let tr = crate::i18n::t(crate::i18n::Lang::En);
+        let cmd = if cfg!(target_os = "windows") {
+            "cmd /C exit 42"
+        } else {
+            "exit 42"
+        };
+        let (code, _, _) = execute_command(cmd, tr).unwrap();
+        assert_ne!(code, 0);
+    }
+
+    #[test]
+    fn execute_captures_stderr() {
+        let tr = crate::i18n::t(crate::i18n::Lang::En);
+        let cmd = if cfg!(target_os = "windows") {
+            "echo error 1>&2"
+        } else {
+            "echo error >&2"
+        };
+        let (_, _, stderr) = execute_command(cmd, tr).unwrap();
+        assert!(stderr.contains("error"));
+    }
+}

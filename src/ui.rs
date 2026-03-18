@@ -61,3 +61,53 @@ pub fn create_spinner(msg: &str) -> ProgressBar {
     pb.enable_steady_tick(Duration::from_millis(80));
     pb
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn print_command_diff_same_noop() {
+        // same commands should not panic
+        print_command_diff("ls", "ls");
+    }
+
+    #[test]
+    fn print_command_diff_empty_original_noop() {
+        print_command_diff("", "ls");
+    }
+
+    #[test]
+    fn print_command_diff_empty_fixed_noop() {
+        print_command_diff("ls", "");
+    }
+
+    #[test]
+    fn print_command_diff_both_empty_noop() {
+        print_command_diff("", "");
+    }
+
+    #[test]
+    fn print_command_diff_different_no_panic() {
+        print_command_diff("ls -la", "ls -lh");
+    }
+
+    #[test]
+    fn create_spinner_does_not_panic() {
+        let spinner = create_spinner("loading...");
+        spinner.finish_and_clear();
+    }
+
+    #[test]
+    fn print_functions_do_not_panic() {
+        let tr = crate::i18n::t(crate::i18n::Lang::En);
+        print_command("echo hello");
+        print_warning(tr);
+        print_danger(tr);
+        print_error("test error");
+        print_info("test info");
+        print_cached(tr);
+        print_explanation(tr, "test explanation\nline 2");
+        print_diagnosis(tr, "test diagnosis");
+    }
+}

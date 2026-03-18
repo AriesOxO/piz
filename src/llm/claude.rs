@@ -102,3 +102,65 @@ impl LlmBackend for ClaudeBackend {
         self.send_request(body).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_config(base_url: Option<&str>) -> ClaudeConfig {
+        ClaudeConfig {
+            api_key: "test-key".into(),
+            model: "claude-sonnet-4-20250514".into(),
+            base_url: base_url.map(|s| s.into()),
+        }
+    }
+
+    #[test]
+    fn build_url_default() {
+        let backend = ClaudeBackend::new(make_config(None));
+        assert_eq!(backend.build_url(), "https://api.anthropic.com/v1/messages");
+    }
+
+    #[test]
+    fn build_url_custom_base() {
+        let backend = ClaudeBackend::new(make_config(Some("https://my-proxy.com")));
+        assert_eq!(backend.build_url(), "https://my-proxy.com/v1/messages");
+    }
+
+    #[test]
+    fn build_url_trailing_slash_stripped() {
+        let backend = ClaudeBackend::new(make_config(Some("https://my-proxy.com/")));
+        assert_eq!(backend.build_url(), "https://my-proxy.com/v1/messages");
+    }
+
+    #[test]
+    fn build_url_preserves_path_prefix() {
+        let backend = ClaudeBackend::new(make_config(Some("https://my-proxy.com/prefix")));
+        assert_eq!(
+            backend.build_url(),
+            "https://my-proxy.com/prefix/v1/messages"
+        );
+    }
+
+    #[test]
+    fn config_model_preserved() {
+        let backend = ClaudeBackend::new(make_config(None));
+        assert_eq!(backend.config.model, "claude-sonnet-4-20250514");
+    }
+
+    #[test]
+    fn response_text_extraction() {
+        let response = r#"{"content":[{"text":"hello world"}]}"#;
+        let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
+        let text = parsed["content"][0]["text"].as_str();
+        assert_eq!(text, Some("hello world"));
+    }
+
+    #[test]
+    fn response_unexpected_format() {
+        let response = r#"{"content":[]}"#;
+        let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
+        let text = parsed["content"][0]["text"].as_str();
+        assert!(text.is_none());
+    }
+}

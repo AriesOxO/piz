@@ -536,4 +536,94 @@ mod tests {
         let result = cache.get("list files", "Windows", "PowerShell").unwrap();
         assert_eq!(result, None);
     }
+
+    // ── Additional cache tests ──
+
+    #[test]
+    fn lru_eviction_boundary_exact_max() {
+        let cache = Cache::open_in_memory_with_max(168, 3).unwrap();
+        cache.put("q1", "L", "b", "c1", "safe", "").unwrap();
+        cache.put("q2", "L", "b", "c2", "safe", "").unwrap();
+        cache.put("q3", "L", "b", "c3", "safe", "").unwrap();
+        assert_eq!(cache.count().unwrap(), 3);
+        // 4th triggers eviction
+        cache.put("q4", "L", "b", "c4", "safe", "").unwrap();
+        assert!(cache.count().unwrap() <= 3);
+    }
+
+    #[test]
+    fn history_ordering_newest_first() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache.record_execution("q1", "c1", 0, "safe").unwrap();
+        cache.record_execution("q2", "c2", 0, "safe").unwrap();
+        cache.record_execution("q3", "c3", 0, "safe").unwrap();
+        let history = cache.list_history(10).unwrap();
+        assert_eq!(history.len(), 3);
+        // newest first (ORDER BY id DESC)
+        assert_eq!(history[0].0, "q3");
+        assert_eq!(history[2].0, "q1");
+    }
+
+    #[test]
+    fn search_history_no_match() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache
+            .record_execution("git status", "git status", 0, "safe")
+            .unwrap();
+        let results = cache.search_history("nonexistent", 10).unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn search_history_matches_command_field() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache
+            .record_execution("list files", "ls -la", 0, "safe")
+            .unwrap();
+        // search should match both query and command
+        let results = cache.search_history("ls", 10).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn clear_does_not_affect_history() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache.put("q1", "L", "b", "c1", "safe", "").unwrap();
+        cache.record_execution("q1", "c1", 0, "safe").unwrap();
+        cache.clear().unwrap();
+        assert_eq!(cache.count().unwrap(), 0);
+        let history = cache.list_history(10).unwrap();
+        assert_eq!(history.len(), 1);
+    }
+
+    #[test]
+    fn history_with_exit_code() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        cache.record_execution("q", "cmd", 42, "warning").unwrap();
+        let history = cache.list_history(10).unwrap();
+        assert_eq!(history[0].2, 42); // exit_code
+        assert_eq!(history[0].3, "warning"); // danger
+    }
+
+    #[test]
+    fn list_history_respects_limit() {
+        let cache = Cache::open_in_memory(168).unwrap();
+        for i in 0..10 {
+            cache
+                .record_execution(&format!("q{}", i), &format!("c{}", i), 0, "safe")
+                .unwrap();
+        }
+        let history = cache.list_history(3).unwrap();
+        assert_eq!(history.len(), 3);
+    }
+
+    #[test]
+    fn make_key_empty_query() {
+        let k1 = Cache::make_key("", "Linux", "bash");
+        let k2 = Cache::make_key("", "Linux", "bash");
+        assert_eq!(k1, k2);
+        // different from non-empty
+        let k3 = Cache::make_key("x", "Linux", "bash");
+        assert_ne!(k1, k3);
+    }
 }

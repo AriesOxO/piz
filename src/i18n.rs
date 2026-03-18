@@ -503,4 +503,153 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn all_injection_messages_non_empty_zh() {
+        let tr = t(Lang::Zh);
+        let fields = [
+            tr.inject_env_exfiltration,
+            tr.inject_base64_shell,
+            tr.inject_reverse_shell,
+            tr.inject_eval_remote,
+            tr.inject_source_remote,
+            tr.inject_overwrite_config,
+            tr.inject_crontab_modify,
+            tr.inject_download_execute,
+            tr.inject_config_file_attack,
+            tr.inject_ld_preload,
+            tr.inject_histfile_suppression,
+            tr.inject_proc_subst_redirect,
+        ];
+        for (i, field) in fields.iter().enumerate() {
+            assert!(!field.is_empty(), "inject field #{} is empty for Zh", i);
+        }
+    }
+
+    #[test]
+    fn all_injection_messages_non_empty_en() {
+        let tr = t(Lang::En);
+        let fields = [
+            tr.inject_env_exfiltration,
+            tr.inject_base64_shell,
+            tr.inject_reverse_shell,
+            tr.inject_eval_remote,
+            tr.inject_source_remote,
+            tr.inject_overwrite_config,
+            tr.inject_crontab_modify,
+            tr.inject_download_execute,
+            tr.inject_config_file_attack,
+            tr.inject_ld_preload,
+            tr.inject_histfile_suppression,
+            tr.inject_proc_subst_redirect,
+        ];
+        for (i, field) in fields.iter().enumerate() {
+            assert!(!field.is_empty(), "inject field #{} is empty for En", i);
+        }
+    }
+
+    #[test]
+    fn chat_messages_non_empty() {
+        for lang in [Lang::Zh, Lang::En] {
+            let tr = t(lang);
+            assert!(!tr.chat_title.is_empty(), "{:?}: chat_title", lang);
+            assert!(!tr.chat_hint.is_empty(), "{:?}: chat_hint", lang);
+            assert!(!tr.bye.is_empty(), "{:?}: bye", lang);
+            assert!(!tr.chat_help_desc.is_empty(), "{:?}: chat_help_desc", lang);
+            assert!(
+                !tr.chat_clear_desc.is_empty(),
+                "{:?}: chat_clear_desc",
+                lang
+            );
+            assert!(
+                !tr.chat_history_desc.is_empty(),
+                "{:?}: chat_history_desc",
+                lang
+            );
+            assert!(!tr.chat_cleared.is_empty(), "{:?}: chat_cleared", lang);
+            assert!(
+                !tr.chat_unknown_cmd.is_empty(),
+                "{:?}: chat_unknown_cmd",
+                lang
+            );
+        }
+    }
+
+    #[test]
+    fn detail_messages_non_empty() {
+        for lang in [Lang::Zh, Lang::En] {
+            let tr = t(lang);
+            assert!(
+                !tr.detail_toggle_on.is_empty(),
+                "{:?}: detail_toggle_on",
+                lang
+            );
+            assert!(
+                !tr.detail_toggle_off.is_empty(),
+                "{:?}: detail_toggle_off",
+                lang
+            );
+            assert!(
+                !tr.detail_fetching.is_empty(),
+                "{:?}: detail_fetching",
+                lang
+            );
+            assert!(
+                !tr.command_explanation.is_empty(),
+                "{:?}: command_explanation",
+                lang
+            );
+        }
+    }
+
+    #[test]
+    fn fix_messages_non_empty() {
+        for lang in [Lang::Zh, Lang::En] {
+            let tr = t(lang);
+            assert!(!tr.diagnosis.is_empty(), "{:?}: diagnosis", lang);
+            assert!(
+                !tr.auto_fix_prompt.is_empty(),
+                "{:?}: auto_fix_prompt",
+                lang
+            );
+            assert!(
+                !tr.auto_fix_attempting.is_empty(),
+                "{:?}: auto_fix_attempting",
+                lang
+            );
+            assert!(
+                !tr.auto_fix_failed.is_empty(),
+                "{:?}: auto_fix_failed",
+                lang
+            );
+            assert!(!tr.no_piz_record.is_empty(), "{:?}: no_piz_record", lang);
+            assert!(!tr.failed_command.is_empty(), "{:?}: failed_command", lang);
+        }
+    }
+
+    #[test]
+    fn unknown_language_falls_back_to_zh() {
+        let lang = Lang::from_code("fr");
+        assert_eq!(lang, Lang::Zh); // unknown falls back to Zh
+        let tr = t(lang);
+        assert!(!tr.thinking.is_empty());
+    }
+
+    #[test]
+    fn executor_prompt_messages_non_empty() {
+        for lang in [Lang::Zh, Lang::En] {
+            let tr = t(lang);
+            assert!(!tr.execute.is_empty(), "{:?}: execute", lang);
+            assert!(!tr.cancel.is_empty(), "{:?}: cancel", lang);
+            assert!(!tr.edit.is_empty(), "{:?}: edit", lang);
+            assert!(!tr.edit_prompt.is_empty(), "{:?}: edit_prompt", lang);
+            assert!(
+                !tr.confirm_dangerous.is_empty(),
+                "{:?}: confirm_dangerous",
+                lang
+            );
+            assert!(!tr.yes_execute.is_empty(), "{:?}: yes_execute", lang);
+            assert!(!tr.no_cancel.is_empty(), "{:?}: no_cancel", lang);
+        }
+    }
 }

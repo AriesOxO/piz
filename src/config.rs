@@ -619,4 +619,118 @@ api_key = "sk-test"
         assert_eq!(path.extension().unwrap(), "toml");
         assert!(path.ends_with("config.toml"));
     }
+
+    // ── Backend-specific config parsing ──
+
+    #[test]
+    fn parse_claude_config_standalone() {
+        let toml = r#"
+default_backend = "claude"
+[claude]
+api_key = "sk-ant-test"
+model = "claude-sonnet-4-20250514"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert!(cfg.claude.is_some());
+        let claude = cfg.claude.unwrap();
+        assert_eq!(claude.api_key, "sk-ant-test");
+        assert_eq!(claude.model, "claude-sonnet-4-20250514");
+        assert!(claude.base_url.is_none());
+    }
+
+    #[test]
+    fn parse_claude_config_with_base_url() {
+        let toml = r#"
+[claude]
+api_key = "sk-test"
+base_url = "https://my-proxy.com"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        let claude = cfg.claude.unwrap();
+        assert_eq!(claude.base_url.as_deref(), Some("https://my-proxy.com"));
+    }
+
+    #[test]
+    fn parse_gemini_config_standalone() {
+        let toml = r#"
+default_backend = "gemini"
+[gemini]
+api_key = "AIza-test"
+model = "gemini-2.5-flash"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert!(cfg.gemini.is_some());
+        let gemini = cfg.gemini.unwrap();
+        assert_eq!(gemini.api_key, "AIza-test");
+        assert_eq!(gemini.model, "gemini-2.5-flash");
+    }
+
+    #[test]
+    fn parse_ollama_config_defaults() {
+        let toml = r#"
+[ollama]
+"#;
+        let cfg = parse_config(toml).unwrap();
+        let ollama = cfg.ollama.unwrap();
+        assert_eq!(ollama.host, "http://localhost:11434");
+        assert_eq!(ollama.model, "llama3");
+    }
+
+    // ── Default values ──
+
+    #[test]
+    fn cache_ttl_default() {
+        let cfg = parse_config("").unwrap();
+        assert_eq!(cfg.cache_ttl_hours, 168);
+    }
+
+    #[test]
+    fn cache_max_entries_default() {
+        let cfg = parse_config("").unwrap();
+        assert_eq!(cfg.cache_max_entries, 1000);
+    }
+
+    #[test]
+    fn chat_history_size_default() {
+        let cfg = parse_config("").unwrap();
+        assert_eq!(cfg.chat_history_size, 20);
+    }
+
+    #[test]
+    fn auto_confirm_safe_default() {
+        let cfg = parse_config("").unwrap();
+        assert!(!cfg.auto_confirm_safe);
+    }
+
+    #[test]
+    fn language_default_zh() {
+        let cfg = parse_config("").unwrap();
+        assert_eq!(cfg.language, "zh");
+    }
+
+    #[test]
+    fn language_custom() {
+        let cfg = parse_config("language = \"en\"").unwrap();
+        assert_eq!(cfg.language, "en");
+    }
+
+    #[test]
+    fn default_backend_openai() {
+        let cfg = parse_config("").unwrap();
+        assert_eq!(cfg.default_backend, "openai");
+    }
+
+    // ── mask_api_key edge cases ──
+
+    #[test]
+    fn mask_api_key_empty() {
+        // empty string → 0 * chars
+        assert_eq!(mask_api_key(""), "");
+    }
+
+    #[test]
+    fn mask_api_key_single_char() {
+        // <=8 chars → repeat '*' for each char
+        assert_eq!(mask_api_key("a"), "*");
+    }
 }
