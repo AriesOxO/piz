@@ -710,8 +710,9 @@ fn history_empty() {
 fn history_default_limit() {
     let dir = setup_env_with_config(test_config());
     let db_path = dir.path().join(".piz").join("cache.db");
-    let entries: Vec<(&str, &str, i32, &str)> =
-        (0..30).map(|_| ("query", "command", 0i32, "safe")).collect();
+    let entries: Vec<(&str, &str, i32, &str)> = (0..30)
+        .map(|_| ("query", "command", 0i32, "safe"))
+        .collect();
     seed_history(&db_path, &entries);
 
     let output = run_piz(dir.path(), &["history"]);

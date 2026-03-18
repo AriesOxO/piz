@@ -327,7 +327,10 @@ fn real_llm_no_cache_gives_fresh_result() {
     let output = run_piz_real(&["--pipe", "--no-cache", "show current time exactly"]);
     assert!(output.status.success());
     let s = stdout_str(&output);
-    assert!(!s.trim().is_empty(), "--no-cache should still return a command");
+    assert!(
+        !s.trim().is_empty(),
+        "--no-cache should still return a command"
+    );
 }
 
 #[test]
@@ -374,7 +377,10 @@ fn real_llm_pipe_via_powershell() {
         .unwrap();
     assert!(output.status.success());
     let s = stdout_str(&output);
-    assert!(!s.trim().is_empty(), "PowerShell LLM result should not be empty");
+    assert!(
+        !s.trim().is_empty(),
+        "PowerShell LLM result should not be empty"
+    );
 }
 
 #[test]
