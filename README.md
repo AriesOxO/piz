@@ -190,6 +190,7 @@ Chat mode supports special commands:
 - `/help` — Show available commands
 - `/clear` — Clear conversation history
 - `/history` — View conversation history
+- `/detail` — Toggle inline command explanation on/off
 
 ### Execution history
 
@@ -514,7 +515,9 @@ piz/
 │   ├── shell_init.rs    # Shell integration code generation (bash/zsh/fish/PowerShell) + built-in aliases
 │   └── ui.rs            # Terminal output formatting (spinner, diff, colors)
 ├── tests/
-│   └── integration.rs   # Integration tests
+│   ├── integration.rs   # Integration tests
+│   ├── llm_e2e.rs       # LLM end-to-end tests (require API key, ignored by default)
+│   └── windows_shells.rs # Cross-shell tests (cmd/PowerShell/bash)
 ├── homebrew/
 │   └── piz.rb           # Homebrew formula template (auto-rendered by release workflow)
 ├── install.sh           # macOS/Linux installer
@@ -529,7 +532,7 @@ git clone https://github.com/AriesOxO/piz.git
 cd piz
 
 cargo build --release      # Build
-cargo test                 # Run tests (190)
+cargo test                 # Run tests (437)
 cargo install --path .     # Install to PATH
 ```
 

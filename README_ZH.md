@@ -192,6 +192,7 @@ $ piz chat
 - `/help` — 显示可用命令
 - `/clear` — 清除对话历史
 - `/history` — 查看对话历史
+- `/detail` — 切换内联命令解释开关
 
 ### 执行历史
 
@@ -516,7 +517,9 @@ piz/
 │   ├── shell_init.rs    # Shell 集成代码生成（bash/zsh/fish/PowerShell）+ 内置别名
 │   └── ui.rs            # 终端输出格式化（Spinner、Diff、着色）
 ├── tests/
-│   └── integration.rs   # 集成测试
+│   ├── integration.rs   # 集成测试
+│   ├── llm_e2e.rs       # LLM 端到端测试（需要 API key，默认跳过）
+│   └── windows_shells.rs # 跨 Shell 测试（cmd/PowerShell/bash）
 ├── homebrew/
 │   └── piz.rb           # Homebrew formula 模板（发版时自动渲染）
 ├── install.sh           # macOS/Linux 安装脚本
@@ -531,7 +534,7 @@ git clone https://github.com/AriesOxO/piz.git
 cd piz
 
 cargo build --release      # 构建
-cargo test                 # 运行测试（190 个）
+cargo test                 # 运行测试（437 个）
 cargo install --path .     # 安装到 PATH
 ```
 

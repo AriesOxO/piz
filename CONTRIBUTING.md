@@ -32,7 +32,7 @@ Thank you for your interest in contributing to piz! This document provides guide
 ```bash
 cargo build            # Debug build
 cargo build --release  # Release build
-cargo test             # Run all tests (174 tests)
+cargo test             # Run all tests (437 tests)
 cargo fmt --all -- --check  # Check formatting
 cargo clippy -- -D warnings # Lint check
 ```

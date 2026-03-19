@@ -11,7 +11,7 @@ piz is a Rust CLI tool that translates natural language into shell commands usin
 ```bash
 cargo build                # Debug build
 cargo build --release      # Release build
-cargo test                 # Run all tests (208 tests: 198 unit + 10 integration)
+cargo test                 # Run all tests (437 tests: 344 unit + 45 integration + 48 windows shell)
 cargo test <test_name>     # Run a single test by name
 cargo fmt --all -- --check # Check formatting
 cargo clippy -- -D warnings # Lint (CI treats warnings as errors)
