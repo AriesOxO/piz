@@ -37,6 +37,18 @@ Requires Rust 1.70+. On Windows: MinGW-w64 or MSVC toolchain.
 
 **Config:** TOML at `~/.piz/config.toml`. Interactive setup wizard in `config.rs` with 12 provider presets. First run auto-triggers the wizard. Supports `--show` (masked keys, default), `--raw` (unmasked keys), and `--reset`. `--raw` takes priority over `--show`. `show_explanation` controls inline command explanation (default `false`).
 
+## Pre-push Checklist
+
+Before every `git push`, you MUST run and pass all three checks:
+
+```bash
+cargo fmt --all -- --check   # Formatting — fix with: cargo fmt --all
+cargo clippy -- -D warnings  # Lint — no warnings allowed
+cargo test                   # All tests must pass
+```
+
+If `cargo fmt` fails, run `cargo fmt --all` to auto-fix, then re-check. Do NOT push code that fails any of these checks.
+
 ## Key Conventions
 
 - Commit messages: `<type>: <description>` where type is `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
