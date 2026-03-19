@@ -243,17 +243,17 @@ mod tests {
         let code = generate_init("bash").unwrap();
         // Bash function should start with `piz() {` and end with `}`
         assert!(code.contains("piz() {"));
-        assert!(
-            code.contains("\n}"),
-            "Bash function missing closing brace"
-        );
+        assert!(code.contains("\n}"), "Bash function missing closing brace");
     }
 
     #[test]
     fn fish_function_has_end() {
         let code = generate_init("fish").unwrap();
         assert!(code.contains("function piz"));
-        assert!(code.contains("\nend"), "Fish function missing 'end' keyword");
+        assert!(
+            code.contains("\nend"),
+            "Fish function missing 'end' keyword"
+        );
     }
 
     #[test]
@@ -271,7 +271,10 @@ mod tests {
     fn bash_eval_path_uses_forward_slashes() {
         let code = generate_init("bash").unwrap();
         // On all platforms, bash paths should use forward slashes
-        let lines: Vec<&str> = code.lines().filter(|l| l.contains("eval_command")).collect();
+        let lines: Vec<&str> = code
+            .lines()
+            .filter(|l| l.contains("eval_command"))
+            .collect();
         for line in &lines {
             assert!(
                 !line.contains('\\'),
@@ -303,7 +306,10 @@ mod tests {
         assert!(fish.contains("rm -f"), "fish should rm eval file");
 
         let ps = generate_init("powershell").unwrap();
-        assert!(ps.contains("Remove-Item"), "PowerShell should remove eval file");
+        assert!(
+            ps.contains("Remove-Item"),
+            "PowerShell should remove eval file"
+        );
     }
 
     #[test]
