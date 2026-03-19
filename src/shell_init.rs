@@ -227,4 +227,104 @@ mod tests {
         assert!(code.contains("Set-Alias -Name pf"));
         assert!(code.contains("Set-Alias -Name pc"));
     }
+
+    // ── Shell script syntax validation ──
+
+    #[test]
+    fn bash_has_balanced_braces() {
+        let code = generate_init("bash").unwrap();
+        let opens = code.matches('{').count();
+        let closes = code.matches('}').count();
+        assert_eq!(opens, closes, "Bash script has unbalanced curly braces");
+    }
+
+    #[test]
+    fn bash_function_properly_closed() {
+        let code = generate_init("bash").unwrap();
+        // Bash function should start with `piz() {` and end with `}`
+        assert!(code.contains("piz() {"));
+        assert!(
+            code.contains("\n}"),
+            "Bash function missing closing brace"
+        );
+    }
+
+    #[test]
+    fn fish_function_has_end() {
+        let code = generate_init("fish").unwrap();
+        assert!(code.contains("function piz"));
+        assert!(code.contains("\nend"), "Fish function missing 'end' keyword");
+    }
+
+    #[test]
+    fn powershell_function_has_balanced_braces() {
+        let code = generate_init("powershell").unwrap();
+        let opens = code.matches('{').count();
+        let closes = code.matches('}').count();
+        assert_eq!(
+            opens, closes,
+            "PowerShell script has unbalanced curly braces"
+        );
+    }
+
+    #[test]
+    fn bash_eval_path_uses_forward_slashes() {
+        let code = generate_init("bash").unwrap();
+        // On all platforms, bash paths should use forward slashes
+        let lines: Vec<&str> = code.lines().filter(|l| l.contains("eval_command")).collect();
+        for line in &lines {
+            assert!(
+                !line.contains('\\'),
+                "Bash eval_command path should use forward slashes: {}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn all_shells_reference_eval_command_file() {
+        for shell in &["bash", "fish", "powershell"] {
+            let code = generate_init(shell).unwrap();
+            assert!(
+                code.contains("eval_command"),
+                "{} script should reference eval_command file",
+                shell
+            );
+        }
+    }
+
+    #[test]
+    fn all_shells_clean_up_eval_file() {
+        // All shells should remove the eval file after reading
+        let bash = generate_init("bash").unwrap();
+        assert!(bash.contains("rm -f"), "bash should rm eval file");
+
+        let fish = generate_init("fish").unwrap();
+        assert!(fish.contains("rm -f"), "fish should rm eval file");
+
+        let ps = generate_init("powershell").unwrap();
+        assert!(ps.contains("Remove-Item"), "PowerShell should remove eval file");
+    }
+
+    #[test]
+    fn cmd_hint_mentions_powershell_alternative() {
+        let code = generate_init("cmd").unwrap();
+        assert!(code.contains("PowerShell"));
+    }
+
+    #[test]
+    fn all_shells_pass_subcommands_directly() {
+        // Subcommands like config, chat, fix should bypass --eval
+        for shell in &["bash", "fish", "powershell"] {
+            let code = generate_init(shell).unwrap();
+            for subcmd in &["config", "chat", "fix", "history", "update"] {
+                assert!(
+                    code.contains(subcmd),
+                    "{} script should pass '{}' subcommand directly",
+                    shell,
+                    subcmd
+                );
+            }
+        }
+    }
 }

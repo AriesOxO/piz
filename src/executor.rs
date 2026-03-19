@@ -234,6 +234,11 @@ fn decode_gbk(bytes: &[u8]) -> String {
     use std::ffi::OsString;
     use std::os::windows::ffi::OsStringExt;
 
+    // SAFETY: MultiByteToWideChar is a standard Windows API for codepage conversion.
+    // We call it twice: first with null output buffer to get required length, then with
+    // a properly sized buffer. Return values are checked — on failure we fall back to
+    // lossy UTF-8 conversion. No aliasing or lifetime issues: `bytes` is borrowed
+    // immutably and `wide` is a local owned buffer.
     unsafe {
         let codepage = 936; // GBK
         let len = windows_sys::Win32::Globalization::MultiByteToWideChar(

@@ -147,7 +147,7 @@ mod tests {
         if let Some(Commands::Config { show, .. }) = cli.command {
             assert!(show);
         } else {
-            panic!("expected Config subcommand");
+            unreachable!("expected Config subcommand");
         }
     }
 
@@ -157,7 +157,7 @@ mod tests {
         if let Some(Commands::Config { raw, .. }) = cli.command {
             assert!(raw);
         } else {
-            panic!("expected Config subcommand");
+            unreachable!("expected Config subcommand");
         }
     }
 
@@ -167,7 +167,7 @@ mod tests {
         if let Some(Commands::Config { reset, .. }) = cli.command {
             assert!(reset);
         } else {
-            panic!("expected Config subcommand");
+            unreachable!("expected Config subcommand");
         }
     }
 
@@ -177,7 +177,7 @@ mod tests {
         if let Some(Commands::Config { init, .. }) = cli.command {
             assert!(init);
         } else {
-            panic!("expected Config subcommand");
+            unreachable!("expected Config subcommand");
         }
     }
 
@@ -194,7 +194,7 @@ mod tests {
             assert!(search.is_none());
             assert_eq!(limit, 20);
         } else {
-            panic!("expected History subcommand");
+            unreachable!("expected History subcommand");
         }
     }
 
@@ -204,7 +204,7 @@ mod tests {
         if let Some(Commands::History { search, .. }) = cli.command {
             assert_eq!(search.as_deref(), Some("git"));
         } else {
-            panic!("expected History subcommand");
+            unreachable!("expected History subcommand");
         }
     }
 
@@ -214,7 +214,7 @@ mod tests {
         if let Some(Commands::History { limit, .. }) = cli.command {
             assert_eq!(limit, 50);
         } else {
-            panic!("expected History subcommand");
+            unreachable!("expected History subcommand");
         }
     }
 
@@ -224,7 +224,7 @@ mod tests {
         if let Some(Commands::Init { shell }) = cli.command {
             assert_eq!(shell, "bash");
         } else {
-            panic!("expected Init subcommand");
+            unreachable!("expected Init subcommand");
         }
     }
 

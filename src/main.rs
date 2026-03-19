@@ -43,6 +43,10 @@ fn enable_ansi_support() {
         use windows_sys::Win32::System::Console::{
             GetConsoleMode, SetConsoleMode, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
         };
+        // SAFETY: We obtain the stdout handle via AsRawHandle and pass it to
+        // GetConsoleMode/SetConsoleMode. These are safe Windows API calls that only
+        // read/write the console mode flags. The handle is valid for the lifetime of
+        // stdout and we check return values before using results.
         unsafe {
             let handle =
                 std::io::stdout().as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
@@ -159,17 +163,17 @@ async fn run() -> Result<()> {
             Commands::Chat => {
                 let ctx = context::collect_context();
                 let backend = llm::create_backend(&cfg, cli.backend.as_deref())?;
-                return chat::run_chat(
-                    backend.as_ref(),
-                    &ctx,
+                let chat_cfg = chat::ChatConfig {
+                    backend: backend.as_ref(),
+                    ctx: &ctx,
                     tr,
-                    lang.code(),
-                    cfg.auto_confirm_safe,
-                    cfg.chat_history_size,
-                    cli.verbose,
-                    cli.detail || cfg.show_explanation,
-                )
-                .await;
+                    lang: lang.code(),
+                    auto_confirm: cfg.auto_confirm_safe,
+                    max_history: cfg.chat_history_size,
+                    verbose: cli.verbose,
+                    detail: cli.detail || cfg.show_explanation,
+                };
+                return chat::run_chat(&chat_cfg).await;
             }
             Commands::History { search, limit } => {
                 let c = cache::Cache::open_with_max(cfg.cache_ttl_hours, cfg.cache_max_entries)?;
@@ -253,7 +257,13 @@ async fn run() -> Result<()> {
                 let spinner = ui::create_spinner(tr.detail_fetching);
                 let (sys, usr) =
                     llm::prompt::build_detail_explain_prompt(&ctx, &cached_cmd, lang.code());
-                let expl = backend.chat(&sys, &usr).await.unwrap_or_default();
+                let expl = match backend.chat(&sys, &usr).await {
+                    Ok(e) => e,
+                    Err(e) => {
+                        eprintln!("[warn] Failed to fetch explanation: {:#}", e);
+                        String::new()
+                    }
+                };
                 spinner.finish_and_clear();
                 let _ = c.update_explanation(&query, &ctx.os, &ctx.shell, &expl);
                 expl
@@ -293,17 +303,15 @@ async fn run() -> Result<()> {
                 .await;
             }
 
-            return handle_command_with_autofix(
-                &cached_cmd,
-                final_danger,
-                cfg.auto_confirm_safe,
+            let ec = ExecContext {
+                backend: backend.as_ref(),
+                ctx: &ctx,
                 tr,
-                backend.as_ref(),
-                &ctx,
-                lang.code(),
-                explanation_ref,
-            )
-            .await;
+                lang: lang.code(),
+                auto_confirm: cfg.auto_confirm_safe,
+            };
+            return handle_command_with_autofix(&cached_cmd, final_danger, &ec, explanation_ref)
+                .await;
         }
     }
 
@@ -412,17 +420,14 @@ async fn run() -> Result<()> {
     }
 
     // Execute the command (cache AFTER success, not before)
-    let result = handle_command_with_autofix(
-        &command,
-        final_danger,
-        cfg.auto_confirm_safe,
+    let ec = ExecContext {
+        backend: backend.as_ref(),
+        ctx: &ctx,
         tr,
-        backend.as_ref(),
-        &ctx,
-        lang.code(),
-        explanation_ref,
-    )
-    .await;
+        lang: lang.code(),
+        auto_confirm: cfg.auto_confirm_safe,
+    };
+    let result = handle_command_with_autofix(&command, final_danger, &ec, explanation_ref).await;
 
     // Record execution in history and cache only successful commands
     if let Some(ref c) = cache {
@@ -488,21 +493,29 @@ async fn handle_eval_mode(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Context for command execution with auto-fix support
+struct ExecContext<'a> {
+    backend: &'a dyn llm::LlmBackend,
+    ctx: &'a context::SystemContext,
+    tr: &'a i18n::T,
+    lang: &'a str,
+    auto_confirm: bool,
+}
+
 async fn handle_command_with_autofix(
     command: &str,
     danger: DangerLevel,
-    auto_confirm: bool,
-    tr: &i18n::T,
-    backend: &dyn llm::LlmBackend,
-    ctx: &context::SystemContext,
-    lang: &str,
+    ec: &ExecContext<'_>,
     explanation: Option<&str>,
 ) -> Result<()> {
+    let tr = ec.tr;
+    let auto_confirm = ec.auto_confirm;
     let choice = executor::prompt_user(command, danger, auto_confirm, tr, explanation)?;
     let exec_result = match choice {
         UserChoice::Execute => Some(executor::execute_command_with_shell(
-            command, &ctx.shell, tr,
+            command,
+            &ec.ctx.shell,
+            tr,
         )?),
         UserChoice::Edit(ref edited) => {
             // Re-check edited command for injection and danger
@@ -512,7 +525,9 @@ async fn handle_command_with_autofix(
                 anyhow::bail!("Edited command blocked: {}", reason.message(tr));
             }
             Some(executor::execute_command_with_shell(
-                edited, &ctx.shell, tr,
+                edited,
+                &ec.ctx.shell,
+                tr,
             )?)
         }
         UserChoice::Cancel => {
@@ -528,7 +543,16 @@ async fn handle_command_with_autofix(
                 UserChoice::Edit(edited) => edited.as_str(),
                 _ => command,
             };
-            fix::try_auto_fix(executed_cmd, exit_code, &stderr, tr, backend, ctx, lang).await?;
+            fix::try_auto_fix(
+                executed_cmd,
+                exit_code,
+                &stderr,
+                tr,
+                ec.backend,
+                ec.ctx,
+                ec.lang,
+            )
+            .await?;
         }
     }
 
