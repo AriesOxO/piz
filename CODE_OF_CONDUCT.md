@@ -1,39 +1,33 @@
-# Contributor Covenant Code of Conduct
+# 贡献者行为准则
 
-## Our Pledge
+[English](./CODE_OF_CONDUCT_EN.md) | 简体中文
 
-We as members, contributors, and leaders pledge to make participation in our
-community a harassment-free experience for everyone, regardless of age, body
-size, visible or invisible disability, ethnicity, sex characteristics, gender
-identity and expression, level of experience, education, socio-economic status,
-nationality, personal appearance, race, religion, or sexual identity
-and orientation.
+## 我们的承诺
 
-## Our Standards
+作为成员、贡献者和领导者，我们承诺让每个人都能在无骚扰的环境中参与社区活动，无论其年龄、体型、显性或隐性残障、种族、性别特征、性别认同和表达、经验水平、教育程度、社会经济地位、国籍、外貌、宗教或性取向。
 
-Examples of behavior that contributes to a positive environment:
+## 我们的标准
 
-* Using welcoming and inclusive language
-* Being respectful of differing viewpoints and experiences
-* Gracefully accepting constructive criticism
-* Focusing on what is best for the community
-* Showing empathy towards other community members
+有助于营造积极环境的行为：
 
-Examples of unacceptable behavior:
+* 使用友善和包容的语言
+* 尊重不同的观点和经历
+* 优雅地接受建设性批评
+* 关注对社区最有利的事情
+* 对其他社区成员表示同理心
 
-* The use of sexualized language or imagery and unwelcome sexual attention
-* Trolling, insulting or derogatory comments, and personal or political attacks
-* Public or private harassment
-* Publishing others' private information without explicit permission
-* Other conduct which could reasonably be considered inappropriate
+不可接受的行为：
 
-## Enforcement
+* 使用性暗示语言或图像，以及不受欢迎的性关注
+* 恶意评论、侮辱性或贬低性评论、人身攻击或政治攻击
+* 公开或私下骚扰
+* 未经明确许可发布他人的私人信息
+* 其他可被合理认为不当的行为
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainers. All complaints will be reviewed and
-investigated promptly and fairly.
+## 执行
 
-## Attribution
+对于滥用、骚扰或其他不可接受的行为，可向项目维护者报告。所有投诉将被及时、公正地审查和调查。
 
-This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org/),
-version 2.0.
+## 归属
+
+本行为准则改编自 [Contributor Covenant](https://www.contributor-covenant.org/) 2.0 版本。

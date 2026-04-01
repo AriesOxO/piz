@@ -1,52 +1,54 @@
-# Security Policy
+# 安全策略
 
-## Supported Versions
+[English](./SECURITY_EN.md) | 简体中文
 
-| Version | Supported          |
+## 支持的版本
+
+| 版本 | 支持状态 |
 | ------- | ------------------ |
 | 0.2.x   | :white_check_mark: |
 | < 0.2   | :x:                |
 
-## Reporting a Vulnerability
+## 报告漏洞
 
-If you discover a security vulnerability in piz, please report it responsibly:
+如果你发现 piz 中的安全漏洞，请负责任地报告：
 
-1. **Do NOT open a public issue** for security vulnerabilities
-2. Email the maintainer at the address listed in the repository profile, or use [GitHub Security Advisories](https://github.com/AriesOxO/piz/security/advisories/new)
-3. Include:
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-   - Suggested fix (if any)
+1. **请勿** 公开提交 Issue
+2. 通过仓库个人资料中的邮箱联系维护者，或使用 [GitHub Security Advisories](https://github.com/AriesOxO/piz/security/advisories/new)
+3. 请包含：
+   - 漏洞描述
+   - 复现步骤
+   - 潜在影响
+   - 修复建议（如有）
 
-## Response Timeline
+## 响应时间
 
-- **Acknowledgment**: Within 48 hours
-- **Initial assessment**: Within 1 week
-- **Fix release**: Within 2 weeks for critical issues
+- **确认收到**：48 小时内
+- **初步评估**：1 周内
+- **修复发布**：严重问题 2 周内
 
-## Security Architecture
+## 安全架构
 
-piz implements a 3-layer security model:
+piz 实现了三层安全模型：
 
-1. **Prompt-level refusal** — LLM returns `{"refuse": true}` for non-command input
-2. **Injection detection** — Local regex scan blocks malicious patterns (env exfiltration, reverse shells, base64 payloads, etc.)
-3. **Danger classification** — Regex patterns + LLM-provided level classify commands as Safe/Warning/Dangerous
+1. **Prompt 层拒绝** — LLM 对非命令输入返回 `{"refuse": true}`
+2. **注入检测** — 本地正则扫描拦截恶意模式（环境变量泄露、反弹 Shell、base64 载荷等）
+3. **危险分级** — 正则模式 + LLM 分级，将命令分为 安全/警告/危险
 
-## API Key Storage
+## API 密钥存储
 
-API keys are stored in plaintext in `~/.piz/config.toml`. Users should:
+API 密钥以明文存储在 `~/.piz/config.toml` 中。用户应：
 
-- Set restrictive file permissions: `chmod 600 ~/.piz/config.toml`
-- Never commit this file to version control (`.piz/` is in `.gitignore`)
-- Consider using environment variables for sensitive keys where supported
+- 设置限制性文件权限：`chmod 600 ~/.piz/config.toml`
+- 切勿将此文件提交到版本控制（`.piz/` 已在 `.gitignore` 中）
+- 在支持的场景下考虑使用环境变量存储敏感密钥
 
-## Scope
+## 安全报告范围
 
-The following are in scope for security reports:
+以下属于安全报告范围：
 
-- Command injection bypasses
-- Injection detection evasion
-- API key exposure
-- Privilege escalation via generated commands
-- Eval mode (`--eval`) file security
+- 命令注入绕过
+- 注入检测规避
+- API 密钥泄露
+- 通过生成的命令进行权限提升
+- Eval 模式（`--eval`）文件安全

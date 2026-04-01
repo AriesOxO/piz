@@ -1,154 +1,156 @@
-# Contributing to piz
+# 贡献指南
 
-Thank you for your interest in contributing to piz! This document provides guidelines and information for contributors.
+[English](./CONTRIBUTING_EN.md) | 简体中文
 
-## Getting Started
+感谢你对 piz 项目的关注！本文档提供贡献者指南和相关信息。
 
-1. **Fork** the repository on GitHub
-2. **Clone** your fork locally:
+## 开始
+
+1. 在 GitHub 上 **Fork** 本仓库
+2. **Clone** 你的 fork：
    ```bash
    git clone https://github.com/YOUR_USERNAME/piz.git
    cd piz
    ```
-3. **Create a branch** for your changes:
+3. **创建分支**：
    ```bash
    git checkout -b feat/your-feature-name
    ```
-4. **Build and test**:
+4. **构建和测试**：
    ```bash
    cargo build
    cargo test
    ```
 
-## Development Setup
+## 开发环境
 
-### Prerequisites
+### 前提条件
 
-- Rust 1.70 or later
-- On Windows: MinGW-w64 toolchain (for `windows-gnu` target) or MSVC
+- Rust 1.70 或更高版本
+- Windows 系统需要 MinGW-w64 工具链（`windows-gnu` target）或 MSVC
 
-### Build
+### 构建
 
 ```bash
-cargo build            # Debug build
-cargo build --release  # Release build
-cargo test             # Run all tests (437 tests)
-cargo fmt --all -- --check  # Check formatting
-cargo clippy -- -D warnings # Lint check
+cargo build            # Debug 构建
+cargo build --release  # Release 构建
+cargo test             # 运行所有测试（437 个）
+cargo fmt --all -- --check  # 检查格式
+cargo clippy -- -D warnings # Lint 检查
 ```
 
-## How to Contribute
+## 如何贡献
 
-### Reporting Bugs
+### 报告 Bug
 
-Open an [issue](https://github.com/AriesOxO/piz/issues/new) with:
-- piz version (`piz --version`)
-- OS and shell
-- Steps to reproduce
-- Expected vs actual behavior
+提交 [Issue](https://github.com/AriesOxO/piz/issues/new)，请包含：
+- piz 版本（`piz --version`）
+- 操作系统和 Shell 类型
+- 复现步骤
+- 预期行为和实际行为
 
-### Suggesting Features
+### 功能建议
 
-Open an [issue](https://github.com/AriesOxO/piz/issues/new) describing:
-- The problem you're trying to solve
-- Your proposed solution
-- Any alternatives you considered
+提交 [Issue](https://github.com/AriesOxO/piz/issues/new)，请描述：
+- 你要解决的问题
+- 你建议的解决方案
+- 你考虑过的替代方案
 
-### Pull Requests
+### Pull Request
 
-1. Ensure your code builds without warnings: `cargo build`
-2. All tests pass: `cargo test`
-3. Format your code: `cargo fmt`
-4. Run clippy: `cargo clippy -- -D warnings`
-5. Write tests for new functionality
-6. Keep commits focused — one logical change per commit
+1. 确保代码无警告：`cargo build`
+2. 所有测试通过：`cargo test`
+3. 格式化代码：`cargo fmt`
+4. 运行 clippy：`cargo clippy -- -D warnings`
+5. 为新功能编写测试
+6. 保持 commit 粒度清晰 —— 每个 commit 一个逻辑变更
 
-#### Commit Message Format
+#### Commit 消息格式
 
 ```
-<type>: <short description>
+<type>: <简短描述>
 
-<optional body>
+<可选正文>
 ```
 
-Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
+类型：`feat`、`fix`、`refactor`、`test`、`docs`、`chore`
 
-Examples:
-- `feat: add Gemini backend support`
-- `fix: handle empty LLM response gracefully`
-- `docs: add SiliconFlow config example`
+示例：
+- `feat: 添加 Gemini 后端支持`
+- `fix: 优雅处理空的 LLM 响应`
+- `docs: 添加硅基流动配置示例`
 
-### Areas for Contribution
+### 贡献方向
 
-- **New LLM backends** — Add support for more providers
-- **Danger patterns** — Expand regex detection rules in `danger.rs`
-- **Injection patterns** — Add new `InjectionReason` variants with i18n messages
-- **i18n** — Add new languages or improve translations
-- **Platform support** — Improve Windows/macOS compatibility
-- **Tests** — Increase coverage, especially edge cases
-- **Documentation** — Improve README, add examples
+- **新 LLM 后端** — 添加更多供应商支持
+- **危险模式** — 扩展 `danger.rs` 中的正则检测规则
+- **注入模式** — 添加新的 `InjectionReason` 变体及 i18n 消息
+- **国际化** — 添加新语言或改进翻译
+- **平台支持** — 提升 Windows/macOS 兼容性
+- **测试** — 提高覆盖率，尤其是边界情况
+- **文档** — 改进 README，添加使用示例
 
-## Project Structure
+## 项目结构
 
 ```
 src/
-├── main.rs          # Entry point, CLI dispatch, response parsing, multi-candidate selection
-├── cli.rs           # clap argument definitions (with clap_complete)
-├── config.rs        # Config loading + setup wizard (12 provider presets)
-├── context.rs       # System context (OS, shell, cwd, arch, git, package manager)
-├── i18n.rs          # UI translations (zh/en) including injection messages
+├── main.rs          # 入口，CLI 分发，响应解析，多候选选择
+├── cli.rs           # clap 命令行参数定义（含 clap_complete）
+├── config.rs        # 配置加载 + 配置向导（12 个供应商预设）
+├── context.rs       # 系统上下文（OS、Shell、CWD、架构、Git、包管理器）
+├── i18n.rs          # UI 翻译（中/英），含注入检测消息
 ├── llm/
-│   ├── mod.rs       # LlmBackend trait + factory + retry/backoff
-│   ├── prompt.rs    # Prompt templates (translate, fix, explain, chat, multi-candidate)
-│   ├── openai.rs    # OpenAI adapter (with retry)
-│   ├── claude.rs    # Claude adapter (with retry)
-│   ├── gemini.rs    # Gemini adapter (with retry)
-│   └── ollama.rs    # Ollama adapter (with retry)
-├── cache.rs         # SQLite cache (TTL + LRU eviction) + execution history
-├── danger.rs        # Danger detection + injection scanner (InjectionReason enum)
-├── executor.rs      # Command execution + user confirmation
-├── explain.rs       # Explain mode
-├── fix.rs           # Fix mode + auto-fix retry loop
-├── chat.rs          # Interactive chat mode (slash commands + persistent history)
-├── history.rs       # Shell history reader
-├── shell_init.rs    # Shell integration code generation (bash/zsh/fish/PowerShell)
-└── ui.rs            # Terminal output (spinner, diff, colors)
+│   ├── mod.rs       # LlmBackend trait + 工厂函数 + 重试/退避
+│   ├── prompt.rs    # Prompt 模板（翻译、修复、解释、对话、多候选）
+│   ├── openai.rs    # OpenAI 适配器（含重试）
+│   ├── claude.rs    # Claude 适配器（含重试）
+│   ├── gemini.rs    # Gemini 适配器（含重试）
+│   └── ollama.rs    # Ollama 适配器（含重试）
+├── cache.rs         # SQLite 缓存（TTL + LRU 淘汰）+ 执行历史
+├── danger.rs        # 危险检测 + 注入扫描（InjectionReason 枚举）
+├── executor.rs      # 命令执行 + 用户确认
+├── explain.rs       # 命令解释模式
+├── fix.rs           # 命令纠错模式 + 自动修复重试循环
+├── chat.rs          # 交互式对话模式（斜杠命令 + 历史持久化）
+├── history.rs       # Shell 历史记录读取
+├── shell_init.rs    # Shell 集成代码生成（bash/zsh/fish/PowerShell）
+└── ui.rs            # 终端输出（Spinner、Diff、着色）
 ```
 
-### Adding a New LLM Backend
+### 添加新 LLM 后端
 
-1. Create `src/llm/your_backend.rs`
-2. Implement the `LlmBackend` trait (`chat()` and `chat_with_history()`)
-3. Add retry loop using `super::should_retry()`, `super::backoff_delay()`, `super::MAX_RETRIES`
-4. Use `super::DEFAULT_TEMPERATURE` and `super::DEFAULT_MAX_TOKENS`
-5. Add config struct in `config.rs`
-6. Register in factory function `create_backend()` in `src/llm/mod.rs`
-7. Add setup flow in `config.rs` init wizard
-8. Write tests
+1. 创建 `src/llm/your_backend.rs`
+2. 实现 `LlmBackend` trait（`chat()` 和 `chat_with_history()`）
+3. 使用 `super::should_retry()`、`super::backoff_delay()`、`super::MAX_RETRIES` 添加重试循环
+4. 使用 `super::DEFAULT_TEMPERATURE` 和 `super::DEFAULT_MAX_TOKENS`
+5. 在 `config.rs` 中添加配置结构体
+6. 在 `src/llm/mod.rs` 的工厂函数 `create_backend()` 中注册
+7. 在 `config.rs` 配置向导中添加设置流程
+8. 编写测试
 
-### Adding a New Language
+### 添加新语言
 
-1. Add a variant to `Lang` enum in `src/i18n.rs`
-2. Create a new `static` translation table (including all `inject_*`, `chat_*`, and `select_command` fields)
-3. Add the match arm in `t()` function
-4. Update the language selector in `config.rs`
+1. 在 `src/i18n.rs` 的 `Lang` 枚举中添加变体
+2. 创建新的 `static` 翻译表（包含所有 `inject_*`、`chat_*` 和 `select_command` 字段）
+3. 在 `t()` 函数中添加匹配分支
+4. 更新 `config.rs` 中的语言选择器
 
-### Adding a New Injection Pattern
+### 添加新注入模式
 
-1. Add a variant to `InjectionReason` enum in `src/danger.rs`
-2. Add regex pattern tuple in `detect_injection()` patterns list
-3. Add `inject_*` field to `T` struct in `src/i18n.rs`
-4. Add translations for all languages (zh, en)
-5. Add match arm in `InjectionReason::message()`
-6. Add test case in `danger.rs` tests
-7. Update `all_langs_have_translations` test in `i18n.rs`
+1. 在 `src/danger.rs` 的 `InjectionReason` 枚举中添加变体
+2. 在 `detect_injection()` 的模式列表中添加正则元组
+3. 在 `src/i18n.rs` 的 `T` 结构体中添加 `inject_*` 字段
+4. 为所有语言（中、英）添加翻译
+5. 在 `InjectionReason::message()` 中添加匹配分支
+6. 在 `danger.rs` 测试中添加测试用例
+7. 更新 `i18n.rs` 中的 `all_langs_have_translations` 测试
 
-## Code of Conduct
+## 行为准则
 
-- Be respectful and constructive
-- Focus on the code, not the person
-- Welcome newcomers and help them get started
+- 尊重他人，保持建设性
+- 关注代码本身，而非个人
+- 欢迎新人，帮助他们入门
 
-## License
+## 许可证
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+参与贡献即表示你同意你的贡献将基于 MIT 许可证授权。
