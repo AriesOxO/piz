@@ -37,17 +37,28 @@ Requires Rust 1.70+. On Windows: MinGW-w64 or MSVC toolchain.
 
 **Config:** TOML at `~/.piz/config.toml`. Interactive setup wizard in `config.rs` with 12 provider presets. First run auto-triggers the wizard. Supports `--show` (masked keys, default), `--raw` (unmasked keys), and `--reset`. `--raw` takes priority over `--show`. `show_explanation` controls inline command explanation (default `false`).
 
-## Pre-push Checklist
+## 提交前检查
 
-Before every `git push`, you MUST run and pass all three checks:
+提交（`git commit`）前根据变更文件类型决定是否需要执行检查：
+
+**涉及 `.rs` 文件变更时** — 执行全部三项检查：
 
 ```bash
-cargo fmt --all -- --check   # Formatting — fix with: cargo fmt --all
-cargo clippy -- -D warnings  # Lint — no warnings allowed
-cargo test                   # All tests must pass
+cargo fmt --all -- --check   # 格式化 — 失败时运行 cargo fmt --all 自动修复
+cargo clippy -- -D warnings  # Lint — 不允许有警告
+cargo test                   # 所有测试必须通过
 ```
 
-If `cargo fmt` fails, run `cargo fmt --all` to auto-fix, then re-check. Do NOT push code that fails any of these checks.
+**仅涉及 `Cargo.toml` / `Cargo.lock` 变更时** — 执行后两项：
+
+```bash
+cargo clippy -- -D warnings
+cargo test
+```
+
+**仅涉及文档（`.md`）、配置（`.yml`/`.toml`）、资源文件等非代码变更时** — 无需执行检查，直接提交。
+
+检查不通过时禁止提交。`cargo fmt` 失败时先运行 `cargo fmt --all` 自动修复，将修复结果一并纳入提交。
 
 ## Key Conventions
 
