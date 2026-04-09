@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [0.3.3] - 2026-04-10
+
+### Added / 新增
+
+- **Regenerate option**: Press `[r]` in the confirmation menu to skip cache and re-query the LLM
+- **重新生成选项**：在确认菜单按 `[r]` 跳过缓存重新请求 LLM，无需手动清缓存
+- **Command sanitization**: Auto-strips leading garbage characters (`:`, `$`, `>`) from LLM output, improving compatibility with smaller models
+- **命令清洗**：自动去除 LLM 输出的前导垃圾字符（`:`, `$`, `>`），提升中小模型兼容性
+- **No-op command rejection**: Empty commands, `:`, `true`, and `noop` are rejected instead of being cached or executed
+- **空命令拦截**：空命令、`:`、`true`、`noop` 等无效命令被拒绝，不再缓存或执行
+
+### Improved / 优化
+
+- **Cache key includes model**: Switching LLM models auto-invalidates stale cache entries (key now includes backend:model)
+- **缓存隔离**：缓存 key 加入 model 标识，切换模型后旧缓存自动失效
+- **Cache key includes package manager**: Context-sensitive queries (e.g. "build project") return correct results per project type
+- **上下文感知缓存**：缓存 key 加入包管理器信息，相同查询在不同项目类型下返回正确结果
+- **Default cache TTL reduced from 168h to 48h**: Shorter window for LLM errors to persist
+- **默认缓存 TTL 从 168h 降至 48h**：缩短错误结果的影响窗口
+- Total tests: 400 (355 unit + 45 integration)
+- 测试总数：400（355 单元 + 45 集成）
+
+---
+
 ## [0.3.2] - 2026-03-19
 
 ### Improved / 优化

@@ -29,7 +29,7 @@
 ```
 $ piz list all files larger than 100MB
   ➜ find . -size +100M -type f
-  [Y] Execute  [n] Cancel  [e] Edit
+  [Y] Execute  [n] Cancel  [e] Edit  [r] Regenerate
 ```
 
 ## Features
@@ -42,7 +42,9 @@ $ piz list all files larger than 100MB
 - **Command Fix** - Auto-diagnose and fix failed commands with `piz fix`, with auto-retry (up to 3 attempts)
 - **Interactive Chat** - Multi-turn chat mode with context (`piz chat`), with `/help`, `/clear`, `/history` commands and persistent history
 - **Multi-Candidate** - Generate multiple command options with `-n` and pick your preferred one
-- **Local Cache** - SQLite cache with TTL + LRU eviction, max entries limit, repeated queries return instantly
+- **Regenerate** - Not happy with the result? Press `[r]` to skip cache and re-query the LLM
+- **Local Cache** - SQLite cache with TTL + LRU eviction, model isolation (switching models auto-invalidates old cache), repeated queries return instantly
+- **Command Validation** - Auto-sanitizes LLM output artifacts (leading garbage chars), blocks empty/no-op commands, improves compatibility with smaller models
 - **Execution History** - Track all executed commands with `piz history`, searchable
 - **Shell Integration** - `piz init <shell>` generates shell wrapper functions so `cd`/`export`/`source` work correctly in the current shell (bash, zsh, fish, PowerShell), with built-in aliases (`p`, `pf`, `pc`)
 - **Eval Mode** - `--eval` outputs confirmed command for shell wrapper to eval, used by shell integration
@@ -367,7 +369,7 @@ Config file: `~/.piz/config.toml`
 
 ```toml
 default_backend = "openai"
-cache_ttl_hours = 168          # Cache TTL (7 days)
+cache_ttl_hours = 48           # Cache TTL (2 days)
 cache_max_entries = 1000       # Maximum cache entries (LRU eviction)
 auto_confirm_safe = true       # Auto-execute safe commands
 language = "zh"                # UI language: zh / en

@@ -31,7 +31,11 @@ Requires Rust 1.70+. On Windows: MinGW-w64 or MSVC toolchain.
 2. Injection detection (`danger.rs`) — local regex scan with `InjectionReason` enum (12 variants), i18n messages, blocks malicious patterns. Cached commands are re-validated on retrieval.
 3. Danger classification — regex patterns + LLM-provided level -> Safe/Warning/Dangerous
 
-**Cache:** SQLite with SHA256 keys, configurable TTL, LRU eviction (`cache_max_entries`), expired entry cleanup on open. Also stores execution history for `piz history` subcommand. Explanation text is cached alongside commands with automatic schema migration for existing databases.
+**Cache:** SQLite with SHA256 keys (query|os|shell|model|pkg_mgr), configurable TTL (default 48h), LRU eviction (`cache_max_entries`), expired entry cleanup on open. Cache keys include the active model ID and package manager, so switching models or projects auto-invalidates stale entries. Also stores execution history for `piz history` subcommand. Explanation text is cached alongside commands with automatic schema migration for existing databases.
+
+**Response validation:** `parse_llm_response()` applies multi-level parsing (JSON > embedded JSON > structural regex > backtick), then `sanitize_command()` strips common LLM artifacts (leading `:`, `$`, `>`), and `is_noop_command()` rejects empty/no-op results. Only commands that pass all checks AND execute successfully (exit code 0) are cached.
+
+**Regeneration:** User can press `[r]` in the confirmation menu to delete the current cache entry and re-query the LLM. The main flow uses a `'main_loop` that supports this without restarting the process.
 
 **Chat:** `src/chat.rs` — multi-turn interactive mode with `chat_with_history()`, slash commands (/help, /clear, /history, /detail), persistent history to `~/.piz/chat_history.json`.
 

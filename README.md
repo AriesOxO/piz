@@ -29,7 +29,7 @@
 ```
 $ piz 查看磁盘使用情况
   ➜ df -h
-  [Y] 执行  [n] 取消  [e] 编辑
+  [Y] 执行  [n] 取消  [e] 编辑  [r] 重新生成
 ```
 
 ## 核心功能
@@ -42,7 +42,9 @@ $ piz 查看磁盘使用情况
 - **命令纠错** — `piz fix` 自动诊断并修复失败命令，支持自动重试（最多 3 次）
 - **交互式对话** — `piz chat` 多轮对话模式，支持 `/help`、`/clear`、`/history` 命令和历史持久化
 - **多候选命令** — `-n` 参数生成多个命令方案，自主选择最优方案
-- **本地缓存** — SQLite 缓存 + TTL 过期 + LRU 淘汰 + 最大条目数限制，重复查询秒返回
+- **重新生成** — 对结果不满意？按 `[r]` 跳过缓存重新请求 LLM，无需手动清缓存
+- **本地缓存** — SQLite 缓存 + TTL 过期 + LRU 淘汰 + 模型隔离（切换模型自动失效旧缓存），重复查询秒返回
+- **命令校验** — 自动清洗 LLM 输出的前导垃圾字符，拦截空命令和 no-op，提升中小模型兼容性
 - **执行历史** — `piz history` 查看和搜索所有执行过的命令
 - **Shell 集成** — `piz init <shell>` 生成 Shell 包装函数，使 `cd`/`export`/`source` 在当前 Shell 中正确生效（bash、zsh、fish、PowerShell），内置便捷别名（`p`、`pf`、`pc`）
 - **Eval 模式** — `--eval` 将确认后的命令输出给 Shell 包装函数执行
@@ -369,7 +371,7 @@ irm https://raw.githubusercontent.com/AriesOxO/piz/main/install.ps1 | iex
 
 ```toml
 default_backend = "openai"
-cache_ttl_hours = 168          # 缓存有效期（7天）
+cache_ttl_hours = 48           # 缓存有效期（2天）
 cache_max_entries = 1000       # 最大缓存条目数（LRU 淘汰）
 auto_confirm_safe = true       # 安全命令自动执行
 language = "zh"                # 界面语言：zh / en
