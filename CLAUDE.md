@@ -11,7 +11,7 @@ piz is a Rust CLI tool that translates natural language into shell commands usin
 ```bash
 cargo build                # Debug build
 cargo build --release      # Release build
-cargo test                 # Run all tests (437 tests: 344 unit + 45 integration + 48 windows shell)
+cargo test                 # Run all tests (344 unit + 45 integration + windows shell tests)
 cargo test <test_name>     # Run a single test by name
 cargo fmt --all -- --check # Check formatting
 cargo clippy -- -D warnings # Lint (CI treats warnings as errors)
@@ -36,6 +36,8 @@ Requires Rust 1.70+. On Windows: MinGW-w64 or MSVC toolchain.
 **Chat:** `src/chat.rs` — multi-turn interactive mode with `chat_with_history()`, slash commands (/help, /clear, /history, /detail), persistent history to `~/.piz/chat_history.json`.
 
 **Config:** TOML at `~/.piz/config.toml`. Interactive setup wizard in `config.rs` with 12 provider presets. First run auto-triggers the wizard. Supports `--show` (masked keys, default), `--raw` (unmasked keys), and `--reset`. `--raw` takes priority over `--show`. `show_explanation` controls inline command explanation (default `false`).
+
+**Self-update:** `src/update.rs` — checks GitHub Releases API for latest version, supports in-place binary replacement with rollback on failure. Background update check runs once per 24h (state stored in `~/.piz/update_state.json`).
 
 ## 提交前检查
 
@@ -63,7 +65,7 @@ cargo test
 ## Key Conventions
 
 - Commit messages: `<type>: <description>` where type is `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
-- CI runs on all three platforms (ubuntu, windows, macos)
+- CI runs on ubuntu and windows (`ci.yml`), lint on ubuntu only
 - All tests must pass, clippy must be warning-free, code must be `cargo fmt` compliant
 
 ## Adding a New LLM Backend
