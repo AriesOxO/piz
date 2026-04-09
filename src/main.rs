@@ -150,7 +150,7 @@ async fn run() -> Result<()> {
     if let Some(cmd) = &cli.command {
         match cmd {
             Commands::ClearCache => {
-                let c = cache::Cache::open(cfg.cache_ttl_hours)?;
+                let c = cache::Cache::open(cfg.cache_ttl_hours, "", None)?;
                 let count = c.clear()?;
                 println!("Cleared {} cached entries.", count);
                 return Ok(());
@@ -176,7 +176,12 @@ async fn run() -> Result<()> {
                 return chat::run_chat(&chat_cfg).await;
             }
             Commands::History { search, limit } => {
-                let c = cache::Cache::open_with_max(cfg.cache_ttl_hours, cfg.cache_max_entries)?;
+                let c = cache::Cache::open_with_max(
+                    cfg.cache_ttl_hours,
+                    cfg.cache_max_entries,
+                    "",
+                    None,
+                )?;
                 let entries = if let Some(pattern) = search {
                     c.search_history(pattern, *limit)?
                 } else {
@@ -227,11 +232,14 @@ async fn run() -> Result<()> {
     // Create backend early (needed for both cache hits and LLM calls, for auto-fix)
     let backend = llm::create_backend(&cfg, cli.backend.as_deref())?;
 
-    // Open cache once and reuse
+    // Open cache once and reuse (key includes model+pkg_mgr for isolation)
+    let model_id = config::active_model_id(&cfg, cli.backend.as_deref());
     let cache = if !cli.no_cache {
         Some(cache::Cache::open_with_max(
             cfg.cache_ttl_hours,
             cfg.cache_max_entries,
+            &model_id,
+            ctx.package_manager.as_deref(),
         )?)
     } else {
         None
@@ -239,214 +247,268 @@ async fn run() -> Result<()> {
 
     let detail_active = cli.detail || cfg.show_explanation;
 
-    // Check cache
-    if let Some(ref c) = cache {
-        if let Some((cached_cmd, cached_danger, cached_explanation)) =
-            c.get(&query, &ctx.os, &ctx.shell)?
-        {
-            // Re-validate injection detection on cached commands
-            if let Some(reason) = danger::detect_injection(&cached_cmd) {
+    // Main command loop — supports regeneration when user selects [r]
+    let mut skip_cache = false;
+    let result = 'main_loop: loop {
+        // ── Phase 1: Try cache (unless regenerating) ──
+        if !skip_cache {
+            if let Some(ref c) = cache {
+                if let Some((cached_cmd, cached_danger, cached_explanation)) =
+                    c.get(&query, &ctx.os, &ctx.shell)?
+                {
+                    // Re-validate injection detection on cached commands
+                    if let Some(reason) = danger::detect_injection(&cached_cmd) {
+                        ui::print_danger(tr);
+                        ui::print_info(reason.message(tr));
+                        let _ = c.delete(&query, &ctx.os, &ctx.shell);
+                        anyhow::bail!("Cached command blocked: {}", reason.message(tr));
+                    }
+
+                    // Backfill explanation if detail mode is active but cache has none
+                    let explanation = if detail_active && cached_explanation.is_empty() {
+                        let spinner = ui::create_spinner(tr.detail_fetching);
+                        let (sys, usr) = llm::prompt::build_detail_explain_prompt(
+                            &ctx,
+                            &cached_cmd,
+                            lang.code(),
+                        );
+                        let expl = match backend.chat(&sys, &usr).await {
+                            Ok(e) => e,
+                            Err(e) => {
+                                eprintln!("[warn] Failed to fetch explanation: {:#}", e);
+                                String::new()
+                            }
+                        };
+                        spinner.finish_and_clear();
+                        let _ = c.update_explanation(&query, &ctx.os, &ctx.shell, &expl);
+                        expl
+                    } else {
+                        cached_explanation
+                    };
+
+                    let explanation_ref = if detail_active && !explanation.is_empty() {
+                        Some(explanation.as_str())
+                    } else {
+                        None
+                    };
+
+                    // Pipe mode: output only the command
+                    if cli.pipe {
+                        if let Some(expl) = explanation_ref {
+                            eprintln!("{}", expl);
+                        }
+                        println!("{}", cached_cmd);
+                        break 'main_loop Ok(());
+                    }
+
+                    ui::print_cached(tr);
+                    let regex_danger = danger::detect_danger_regex(&cached_cmd);
+                    let llm_danger = DangerLevel::from_str_level(&cached_danger);
+                    let final_danger = regex_danger.max(llm_danger);
+
+                    // Eval mode for cached commands
+                    if cli.eval {
+                        let regenerate = handle_eval_mode(
+                            &cached_cmd,
+                            final_danger,
+                            cfg.auto_confirm_safe,
+                            tr,
+                            explanation_ref,
+                        )
+                        .await?;
+                        if regenerate {
+                            let _ = c.delete(&query, &ctx.os, &ctx.shell);
+                            skip_cache = true;
+                            continue 'main_loop;
+                        }
+                        break 'main_loop Ok(());
+                    }
+
+                    let ec = ExecContext {
+                        backend: backend.as_ref(),
+                        ctx: &ctx,
+                        tr,
+                        lang: lang.code(),
+                        auto_confirm: cfg.auto_confirm_safe,
+                    };
+                    let regenerate = handle_command_with_autofix(
+                        &cached_cmd,
+                        final_danger,
+                        &ec,
+                        explanation_ref,
+                    )
+                    .await?;
+                    if regenerate {
+                        let _ = c.delete(&query, &ctx.os, &ctx.shell);
+                        skip_cache = true;
+                        continue 'main_loop;
+                    }
+                    break 'main_loop Ok(());
+                }
+            }
+        }
+
+        // ── Phase 2: Call LLM ──
+        let prev_context = executor::load_last_exec()
+            .ok()
+            .map(|last| llm::prompt::PrevContext {
+                command: last.command,
+                exit_code: last.exit_code,
+                stdout_preview: last.stdout.lines().take(3).collect::<Vec<_>>().join("\n"),
+            });
+
+        let candidates = cli.candidates.clamp(1, 5);
+
+        let (system_prompt, user_prompt) = if candidates > 1 {
+            llm::prompt::build_multi_candidate_prompt(
+                &ctx,
+                &query,
+                lang.code(),
+                candidates,
+                prev_context.as_ref(),
+            )
+        } else {
+            llm::prompt::build_translate_prompt_with_context(
+                &ctx,
+                &query,
+                lang.code(),
+                prev_context.as_ref(),
+            )
+        };
+
+        // Augment prompt with explanation request if detail mode is active
+        let system_prompt = if detail_active {
+            llm::prompt::augment_prompt_with_explanation(&system_prompt, lang.code())
+        } else {
+            system_prompt
+        };
+
+        if cli.verbose {
+            eprintln!(
+                "[verbose] system prompt length: {} chars",
+                system_prompt.len()
+            );
+            eprintln!("[verbose] user prompt: {}", user_prompt);
+        }
+
+        let spinner_msg = if skip_cache {
+            tr.regenerating
+        } else {
+            tr.thinking
+        };
+        let response = if cli.pipe {
+            backend.chat(&system_prompt, &user_prompt).await?
+        } else {
+            let spinner = ui::create_spinner(spinner_msg);
+            let r = backend.chat(&system_prompt, &user_prompt).await?;
+            spinner.finish_and_clear();
+            r
+        };
+
+        if cli.verbose {
+            eprintln!("[verbose] response: {}", response);
+        }
+
+        // Multi-candidate selection or single-command parsing
+        let (command, llm_danger, explanation) = if candidates > 1 {
+            select_from_candidates(&response, tr)?
+        } else {
+            let parsed = parse_llm_response(&response)?;
+            (parsed.command, parsed.danger, parsed.explanation)
+        };
+
+        // Injection detection
+        if let Some(reason) = danger::detect_injection(&command) {
+            if !cli.pipe {
                 ui::print_danger(tr);
                 ui::print_info(reason.message(tr));
-                let _ = c.delete(&query, &ctx.os, &ctx.shell);
-                anyhow::bail!("Cached command blocked: {}", reason.message(tr));
             }
+            anyhow::bail!("Command blocked: {}", reason.message(tr));
+        }
 
-            // Backfill explanation if detail mode is active but cache has none
-            let explanation = if detail_active && cached_explanation.is_empty() {
-                let spinner = ui::create_spinner(tr.detail_fetching);
-                let (sys, usr) =
-                    llm::prompt::build_detail_explain_prompt(&ctx, &cached_cmd, lang.code());
-                let expl = match backend.chat(&sys, &usr).await {
-                    Ok(e) => e,
-                    Err(e) => {
-                        eprintln!("[warn] Failed to fetch explanation: {:#}", e);
-                        String::new()
-                    }
-                };
-                spinner.finish_and_clear();
-                let _ = c.update_explanation(&query, &ctx.os, &ctx.shell, &expl);
-                expl
-            } else {
-                cached_explanation
-            };
+        let explanation_ref = if detail_active && !explanation.is_empty() {
+            Some(explanation.as_str())
+        } else {
+            None
+        };
 
-            let explanation_ref = if detail_active && !explanation.is_empty() {
-                Some(explanation.as_str())
-            } else {
-                None
-            };
-
-            // Pipe mode: output only the command
-            if cli.pipe {
-                if let Some(expl) = explanation_ref {
-                    eprintln!("{}", expl);
-                }
-                println!("{}", cached_cmd);
-                return Ok(());
+        // Pipe mode: output only the command
+        if cli.pipe {
+            if let Some(expl) = explanation_ref {
+                eprintln!("{}", expl);
             }
+            println!("{}", command);
+            break 'main_loop Ok(());
+        }
 
-            ui::print_cached(tr);
-            let regex_danger = danger::detect_danger_regex(&cached_cmd);
-            let llm_danger = DangerLevel::from_str_level(&cached_danger);
-            let final_danger = regex_danger.max(llm_danger);
+        // Danger detection: regex + LLM
+        let regex_danger = danger::detect_danger_regex(&command);
+        let final_danger = regex_danger.max(llm_danger);
 
-            // Eval mode for cached commands
-            if cli.eval {
-                return handle_eval_mode(
-                    &cached_cmd,
-                    final_danger,
-                    cfg.auto_confirm_safe,
-                    tr,
-                    explanation_ref,
-                )
-                .await;
-            }
-
-            let ec = ExecContext {
-                backend: backend.as_ref(),
-                ctx: &ctx,
+        // Eval mode: show UI, get confirmation, write command to file for shell wrapper
+        if cli.eval {
+            let regenerate = handle_eval_mode(
+                &command,
+                final_danger,
+                cfg.auto_confirm_safe,
                 tr,
-                lang: lang.code(),
-                auto_confirm: cfg.auto_confirm_safe,
-            };
-            return handle_command_with_autofix(&cached_cmd, final_danger, &ec, explanation_ref)
-                .await;
+                explanation_ref,
+            )
+            .await?;
+            if regenerate {
+                if let Some(ref c) = cache {
+                    let _ = c.delete(&query, &ctx.os, &ctx.shell);
+                }
+                skip_cache = true;
+                continue 'main_loop;
+            }
+            break 'main_loop Ok(());
         }
-    }
 
-    // Call LLM (with implicit context from last execution)
-    let prev_context = executor::load_last_exec()
-        .ok()
-        .map(|last| llm::prompt::PrevContext {
-            command: last.command,
-            exit_code: last.exit_code,
-            stdout_preview: last.stdout.lines().take(3).collect::<Vec<_>>().join("\n"),
-        });
-
-    let candidates = cli.candidates.clamp(1, 5);
-
-    let (system_prompt, user_prompt) = if candidates > 1 {
-        llm::prompt::build_multi_candidate_prompt(
-            &ctx,
-            &query,
-            lang.code(),
-            candidates,
-            prev_context.as_ref(),
-        )
-    } else {
-        llm::prompt::build_translate_prompt_with_context(
-            &ctx,
-            &query,
-            lang.code(),
-            prev_context.as_ref(),
-        )
-    };
-
-    // Augment prompt with explanation request if detail mode is active
-    let system_prompt = if detail_active {
-        llm::prompt::augment_prompt_with_explanation(&system_prompt, lang.code())
-    } else {
-        system_prompt
-    };
-
-    if cli.verbose {
-        eprintln!(
-            "[verbose] system prompt length: {} chars",
-            system_prompt.len()
-        );
-        eprintln!("[verbose] user prompt: {}", user_prompt);
-    }
-
-    let response = if cli.pipe {
-        backend.chat(&system_prompt, &user_prompt).await?
-    } else {
-        let spinner = ui::create_spinner(tr.thinking);
-        let r = backend.chat(&system_prompt, &user_prompt).await?;
-        spinner.finish_and_clear();
-        r
-    };
-
-    if cli.verbose {
-        eprintln!("[verbose] response: {}", response);
-    }
-
-    // Multi-candidate selection or single-command parsing
-    let (command, llm_danger, explanation) = if candidates > 1 {
-        select_from_candidates(&response, tr)?
-    } else {
-        let parsed = parse_llm_response(&response)?;
-        (parsed.command, parsed.danger, parsed.explanation)
-    };
-
-    // Injection detection
-    if let Some(reason) = danger::detect_injection(&command) {
-        if !cli.pipe {
-            ui::print_danger(tr);
-            ui::print_info(reason.message(tr));
-        }
-        anyhow::bail!("Command blocked: {}", reason.message(tr));
-    }
-
-    let explanation_ref = if detail_active && !explanation.is_empty() {
-        Some(explanation.as_str())
-    } else {
-        None
-    };
-
-    // Pipe mode: output only the command
-    if cli.pipe {
-        if let Some(expl) = explanation_ref {
-            eprintln!("{}", expl);
-        }
-        println!("{}", command);
-        return Ok(());
-    }
-
-    // Danger detection: regex + LLM
-    let regex_danger = danger::detect_danger_regex(&command);
-    let final_danger = regex_danger.max(llm_danger);
-
-    // Eval mode: show UI, get confirmation, write command to file for shell wrapper
-    if cli.eval {
-        return handle_eval_mode(
-            &command,
-            final_danger,
-            cfg.auto_confirm_safe,
+        // Execute the command (cache AFTER success, not before)
+        let ec = ExecContext {
+            backend: backend.as_ref(),
+            ctx: &ctx,
             tr,
-            explanation_ref,
-        )
-        .await;
-    }
+            lang: lang.code(),
+            auto_confirm: cfg.auto_confirm_safe,
+        };
+        let regenerate =
+            handle_command_with_autofix(&command, final_danger, &ec, explanation_ref).await?;
+        if regenerate {
+            if let Some(ref c) = cache {
+                let _ = c.delete(&query, &ctx.os, &ctx.shell);
+            }
+            skip_cache = true;
+            continue 'main_loop;
+        }
 
-    // Execute the command (cache AFTER success, not before)
-    let ec = ExecContext {
-        backend: backend.as_ref(),
-        ctx: &ctx,
-        tr,
-        lang: lang.code(),
-        auto_confirm: cfg.auto_confirm_safe,
-    };
-    let result = handle_command_with_autofix(&command, final_danger, &ec, explanation_ref).await;
-
-    // Record execution in history and cache only successful commands
-    if let Some(ref c) = cache {
-        if let Ok(last) = executor::load_last_exec() {
-            let _ =
-                c.record_execution(&query, &last.command, last.exit_code, final_danger.as_str());
-            // Only cache commands that were successfully executed
-            if last.exit_code == 0 {
-                let _ = c.put(
+        // Record execution in history and cache only successful commands
+        if let Some(ref c) = cache {
+            if let Ok(last) = executor::load_last_exec() {
+                let _ = c.record_execution(
                     &query,
-                    &ctx.os,
-                    &ctx.shell,
-                    &command,
+                    &last.command,
+                    last.exit_code,
                     final_danger.as_str(),
-                    &explanation,
                 );
+                // Only cache commands that were successfully executed
+                // and are not no-op (sanity check)
+                if last.exit_code == 0 && !is_noop_command(&command) {
+                    let _ = c.put(
+                        &query,
+                        &ctx.os,
+                        &ctx.shell,
+                        &command,
+                        final_danger.as_str(),
+                        &explanation,
+                    );
+                }
             }
         }
-    }
+
+        break 'main_loop Ok(());
+    };
 
     // Check for updates (at most once per 24h, fast: reads local state or 5s timeout)
     if !cli.pipe {
@@ -457,15 +519,14 @@ async fn run() -> Result<()> {
 }
 
 /// Eval mode: show command and get user confirmation, then write to file for shell wrapper.
-/// The shell wrapper function reads the file and evals the command in the current shell,
-/// so cd, export, source, etc. all work correctly.
+/// Returns Ok(true) if the user requested regeneration.
 async fn handle_eval_mode(
     command: &str,
     danger: DangerLevel,
     auto_confirm: bool,
     tr: &i18n::T,
     explanation: Option<&str>,
-) -> Result<()> {
+) -> Result<bool> {
     let choice = executor::prompt_user(command, danger, auto_confirm, tr, explanation)?;
     let final_cmd = match choice {
         UserChoice::Execute => command.to_string(),
@@ -483,6 +544,9 @@ async fn handle_eval_mode(
             let _ = std::fs::remove_file(config::piz_dir()?.join("eval_command"));
             std::process::exit(1);
         }
+        UserChoice::Regenerate => {
+            return Ok(true);
+        }
     };
 
     // Write command to file for shell wrapper to read and eval
@@ -490,7 +554,7 @@ async fn handle_eval_mode(
     std::fs::create_dir_all(&dir)?;
     std::fs::write(dir.join("eval_command"), &final_cmd)?;
 
-    Ok(())
+    Ok(false)
 }
 
 /// Context for command execution with auto-fix support
@@ -502,12 +566,13 @@ struct ExecContext<'a> {
     auto_confirm: bool,
 }
 
+/// Returns Ok(true) if the user requested regeneration, Ok(false) otherwise.
 async fn handle_command_with_autofix(
     command: &str,
     danger: DangerLevel,
     ec: &ExecContext<'_>,
     explanation: Option<&str>,
-) -> Result<()> {
+) -> Result<bool> {
     let tr = ec.tr;
     let auto_confirm = ec.auto_confirm;
     let choice = executor::prompt_user(command, danger, auto_confirm, tr, explanation)?;
@@ -532,7 +597,10 @@ async fn handle_command_with_autofix(
         }
         UserChoice::Cancel => {
             ui::print_info(tr.cancelled);
-            return Ok(());
+            return Ok(false);
+        }
+        UserChoice::Regenerate => {
+            return Ok(true);
         }
     };
 
@@ -556,7 +624,7 @@ async fn handle_command_with_autofix(
         }
     }
 
-    Ok(())
+    Ok(false)
 }
 
 /// Result of parsing an LLM translate response
@@ -724,7 +792,7 @@ pub fn handle_command_in_chat(
                 ui::print_error(&format!("{:#}", e));
             }
         }
-        UserChoice::Cancel => {
+        UserChoice::Cancel | UserChoice::Regenerate => {
             ui::print_info(tr.cancelled);
         }
     }
@@ -746,6 +814,35 @@ fn check_refusal(v: &serde_json::Value) -> Option<String> {
     None
 }
 
+/// Clean up common LLM output artifacts from a command string.
+/// Strips leading garbage characters (`:`, `$`, `>`) that some models prepend.
+fn sanitize_command(cmd: &str) -> String {
+    let trimmed = cmd.trim();
+    // Strip leading `:` followed by a letter (e.g. `:ifconfig` → `ifconfig`)
+    // but preserve standalone `:` or shell no-ops
+    if let Some(rest) = trimmed.strip_prefix(':') {
+        let rest = rest.trim_start();
+        if !rest.is_empty() && rest.starts_with(|c: char| c.is_ascii_alphabetic()) {
+            return rest.to_string();
+        }
+    }
+    // Strip leading `$ ` prompt marker
+    if let Some(rest) = trimmed.strip_prefix("$ ") {
+        return rest.to_string();
+    }
+    // Strip leading `> ` prompt marker
+    if let Some(rest) = trimmed.strip_prefix("> ") {
+        return rest.to_string();
+    }
+    trimmed.to_string()
+}
+
+/// Check if a command is effectively empty or a no-op that should be treated as refusal.
+fn is_noop_command(cmd: &str) -> bool {
+    let trimmed = cmd.trim();
+    trimmed.is_empty() || trimmed == ":" || trimmed == "true" || trimmed == "noop"
+}
+
 /// Parse LLM response with multi-level fallback:
 /// 1. Direct JSON parse
 /// 2. Extract JSON block from text
@@ -755,6 +852,21 @@ fn check_refusal(v: &serde_json::Value) -> Option<String> {
 /// NOTE: We intentionally do NOT fall back to "raw text as command" —
 /// if all parsing levels fail, it's an error, not a command to execute.
 pub fn parse_llm_response(response: &str) -> Result<ParsedCommand> {
+    let mut parsed = parse_llm_response_raw(response)?;
+    // Sanitize: strip common LLM artifacts (leading `:`, `$`, `>`)
+    parsed.command = sanitize_command(&parsed.command);
+    // Reject no-op commands that indicate LLM failure
+    if is_noop_command(&parsed.command) {
+        anyhow::bail!(
+            "LLM returned an empty or no-op command. Raw response:\n{}",
+            response.trim()
+        );
+    }
+    Ok(parsed)
+}
+
+/// Raw parse without sanitization — used internally.
+fn parse_llm_response_raw(response: &str) -> Result<ParsedCommand> {
     let trimmed = response.trim();
 
     // Level 1: Direct JSON parse
@@ -1182,5 +1294,73 @@ mod tests {
         let parsed = parse_llm_response(input).unwrap();
         assert_eq!(parsed.command, r#"cd /d D:\"#);
         assert_eq!(parsed.explanation, "");
+    }
+
+    // ── sanitize_command ──
+
+    #[test]
+    fn sanitize_strips_leading_colon_before_command() {
+        assert_eq!(sanitize_command(":ifconfig"), "ifconfig");
+        assert_eq!(sanitize_command(": ls -la"), "ls -la");
+    }
+
+    #[test]
+    fn sanitize_preserves_standalone_colon() {
+        // Standalone `:` is a valid shell no-op — don't transform it
+        assert_eq!(sanitize_command(":"), ":");
+    }
+
+    #[test]
+    fn sanitize_strips_dollar_prompt() {
+        assert_eq!(sanitize_command("$ ls -la"), "ls -la");
+    }
+
+    #[test]
+    fn sanitize_strips_angle_prompt() {
+        assert_eq!(sanitize_command("> echo hello"), "echo hello");
+    }
+
+    #[test]
+    fn sanitize_preserves_normal_command() {
+        assert_eq!(sanitize_command("ls -la"), "ls -la");
+        assert_eq!(sanitize_command("  df -h  "), "df -h");
+    }
+
+    // ── is_noop_command ──
+
+    #[test]
+    fn noop_detection() {
+        assert!(is_noop_command(""));
+        assert!(is_noop_command(":"));
+        assert!(is_noop_command("true"));
+        assert!(is_noop_command("  :  "));
+        assert!(is_noop_command("noop"));
+        assert!(!is_noop_command("ls"));
+        assert!(!is_noop_command("echo hello"));
+    }
+
+    // ── parse rejects noop ──
+
+    #[test]
+    fn parse_noop_command_errors() {
+        let input = r#"{"command": ":", "danger": "safe"}"#;
+        let result = parse_llm_response(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_empty_command_errors() {
+        let input = r#"{"command": "", "danger": "safe"}"#;
+        let result = parse_llm_response(input);
+        assert!(result.is_err());
+    }
+
+    // ── parse sanitizes leading colon ──
+
+    #[test]
+    fn parse_sanitizes_colon_prefix() {
+        let input = r#"{"command": ":ifconfig | grep inet", "danger": "safe"}"#;
+        let parsed = parse_llm_response(input).unwrap();
+        assert_eq!(parsed.command, "ifconfig | grep inet");
     }
 }

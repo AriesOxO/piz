@@ -22,6 +22,7 @@ pub enum UserChoice {
     Execute,
     Cancel,
     Edit(String),
+    Regenerate,
 }
 
 pub fn prompt_user(
@@ -55,7 +56,7 @@ pub fn prompt_user(
 
     // Dangerous commands: always require explicit confirmation, cannot be skipped
     if danger == DangerLevel::Dangerous {
-        let items = vec![tr.yes_execute, tr.no_cancel, tr.edit_command];
+        let items = vec![tr.yes_execute, tr.no_cancel, tr.edit_command, tr.regenerate];
         let selection = Select::new()
             .with_prompt(tr.confirm_dangerous.red().bold().to_string())
             .items(&items)
@@ -71,12 +72,13 @@ pub fn prompt_user(
                     .interact_text()?;
                 Ok(UserChoice::Edit(edited))
             }
+            3 => Ok(UserChoice::Regenerate),
             _ => Ok(UserChoice::Cancel),
         };
     }
 
     // Normal prompt for safe/warning
-    let items = vec![tr.execute, tr.cancel, tr.edit];
+    let items = vec![tr.execute, tr.cancel, tr.edit, tr.regenerate_short];
     let selection = Select::new().items(&items).default(0).interact()?;
 
     match selection {
@@ -88,6 +90,7 @@ pub fn prompt_user(
                 .interact_text()?;
             Ok(UserChoice::Edit(edited))
         }
+        3 => Ok(UserChoice::Regenerate),
         _ => Ok(UserChoice::Cancel),
     }
 }

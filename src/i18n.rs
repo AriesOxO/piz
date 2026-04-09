@@ -44,6 +44,9 @@ pub struct T {
     pub cancel: &'static str,
     pub edit: &'static str,
     pub edit_prompt: &'static str,
+    pub regenerate: &'static str,
+    pub regenerate_short: &'static str,
+    pub regenerating: &'static str,
     pub exit_code: &'static str,
 
     // ── fix ──
@@ -139,6 +142,9 @@ static ZH: T = T {
     cancel: "[n] 取消",
     edit: "[e] 编辑",
     edit_prompt: "编辑命令",
+    regenerate: "重新生成",
+    regenerate_short: "[r] 重新生成",
+    regenerating: "重新生成中...",
     exit_code: "退出码",
 
     no_piz_record: "未找到 piz 执行记录，正在读取 shell 历史...",
@@ -220,6 +226,9 @@ static EN: T = T {
     cancel: "[n] Cancel",
     edit: "[e] Edit",
     edit_prompt: "Edit command",
+    regenerate: "Regenerate",
+    regenerate_short: "[r] Regenerate",
+    regenerating: "Regenerating...",
     exit_code: "Exit code",
 
     no_piz_record: "No piz execution record found, reading shell history...",
@@ -330,6 +339,13 @@ mod tests {
             assert!(!tr.cancel.is_empty(), "{:?}: cancel", lang);
             assert!(!tr.edit.is_empty(), "{:?}: edit", lang);
             assert!(!tr.edit_prompt.is_empty(), "{:?}: edit_prompt", lang);
+            assert!(!tr.regenerate.is_empty(), "{:?}: regenerate", lang);
+            assert!(
+                !tr.regenerate_short.is_empty(),
+                "{:?}: regenerate_short",
+                lang
+            );
+            assert!(!tr.regenerating.is_empty(), "{:?}: regenerating", lang);
             assert!(!tr.exit_code.is_empty(), "{:?}: exit_code", lang);
             assert!(!tr.no_piz_record.is_empty(), "{:?}: no_piz_record", lang);
             assert!(

@@ -161,7 +161,7 @@ mod tests {
     fn config_with_openai() -> Config {
         Config {
             default_backend: "openai".into(),
-            cache_ttl_hours: 168,
+            cache_ttl_hours: 48,
             auto_confirm_safe: false,
             show_explanation: false,
             language: "zh".into(),
@@ -209,7 +209,7 @@ mod tests {
     fn create_backend_missing_config_errors() {
         let cfg = Config {
             default_backend: "claude".into(),
-            cache_ttl_hours: 168,
+            cache_ttl_hours: 48,
             auto_confirm_safe: false,
             show_explanation: false,
             language: "zh".into(),

@@ -62,7 +62,7 @@ fn default_backend() -> String {
     "openai".into()
 }
 fn default_cache_ttl() -> u64 {
-    168
+    48
 }
 fn default_language() -> String {
     "zh".into()
@@ -241,7 +241,7 @@ pub fn init_config() -> Result<()> {
     // Assemble config
     let mut content = format!(
         "default_backend = \"{backend}\"\n\
-         cache_ttl_hours = 168\n\
+         cache_ttl_hours = 48\n\
          auto_confirm_safe = {auto_confirm}\n\
          language = \"{lang}\"\n",
         backend = backend_name,
@@ -444,6 +444,20 @@ fn collect_ollama_config(tr: &i18n::T) -> Result<String> {
     ))
 }
 
+/// Return a stable identifier for the active backend+model combination.
+/// Used as part of the cache key so switching models auto-invalidates stale entries.
+pub fn active_model_id(config: &Config, backend_override: Option<&str>) -> String {
+    let backend = backend_override.unwrap_or(&config.default_backend);
+    let model = match backend {
+        "openai" => config.openai.as_ref().map(|c| c.model.as_str()),
+        "claude" => config.claude.as_ref().map(|c| c.model.as_str()),
+        "gemini" => config.gemini.as_ref().map(|c| c.model.as_str()),
+        "ollama" => config.ollama.as_ref().map(|c| c.model.as_str()),
+        _ => None,
+    };
+    format!("{}:{}", backend, model.unwrap_or("default"))
+}
+
 /// Escape a string value for TOML output (handles quotes, backslashes, etc.)
 fn toml_escape(s: &str) -> String {
     let value = toml::Value::String(s.to_string());
@@ -539,7 +553,7 @@ api_key = "sk-test"
 "#;
         let cfg = parse_config(toml).unwrap();
         assert_eq!(cfg.default_backend, "openai");
-        assert_eq!(cfg.cache_ttl_hours, 168);
+        assert_eq!(cfg.cache_ttl_hours, 48);
         assert!(!cfg.auto_confirm_safe);
         assert_eq!(cfg.openai.unwrap().model, "gpt-4o-mini");
         assert!(cfg.claude.is_none());
@@ -681,7 +695,7 @@ model = "gemini-2.5-flash"
     #[test]
     fn cache_ttl_default() {
         let cfg = parse_config("").unwrap();
-        assert_eq!(cfg.cache_ttl_hours, 168);
+        assert_eq!(cfg.cache_ttl_hours, 48);
     }
 
     #[test]

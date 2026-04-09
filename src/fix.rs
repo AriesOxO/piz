@@ -74,7 +74,7 @@ pub async fn fix_last_command(
                 try_auto_fix(&edited, code, &stderr_out, tr, backend, ctx, lang).await?;
             }
         }
-        UserChoice::Cancel => {
+        UserChoice::Cancel | UserChoice::Regenerate => {
             ui::print_info(tr.cancelled);
         }
     }
@@ -179,7 +179,7 @@ pub async fn try_auto_fix(
                     ));
                 }
             }
-            UserChoice::Cancel => {
+            UserChoice::Cancel | UserChoice::Regenerate => {
                 return Ok(());
             }
         }

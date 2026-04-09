@@ -11,21 +11,34 @@ pub struct Cache {
     conn: Connection,
     ttl_hours: u64,
     max_entries: usize,
+    model_id: String,
+    pkg_mgr: String,
 }
 
 impl Cache {
-    pub fn open(ttl_hours: u64) -> Result<Self> {
-        Self::open_with_max(ttl_hours, 1000)
+    pub fn open(ttl_hours: u64, model_id: &str, pkg_mgr: Option<&str>) -> Result<Self> {
+        Self::open_with_max(ttl_hours, 1000, model_id, pkg_mgr)
     }
 
-    pub fn open_with_max(ttl_hours: u64, max_entries: usize) -> Result<Self> {
+    pub fn open_with_max(
+        ttl_hours: u64,
+        max_entries: usize,
+        model_id: &str,
+        pkg_mgr: Option<&str>,
+    ) -> Result<Self> {
         let dir = config::piz_dir()?;
         std::fs::create_dir_all(&dir)?;
         let db_path = dir.join("cache.db");
-        Self::open_at(&db_path, ttl_hours, max_entries)
+        Self::open_at(&db_path, ttl_hours, max_entries, model_id, pkg_mgr)
     }
 
-    pub fn open_at(db_path: &std::path::Path, ttl_hours: u64, max_entries: usize) -> Result<Self> {
+    pub fn open_at(
+        db_path: &std::path::Path,
+        ttl_hours: u64,
+        max_entries: usize,
+        model_id: &str,
+        pkg_mgr: Option<&str>,
+    ) -> Result<Self> {
         let conn = Connection::open(db_path)
             .with_context(|| format!("Failed to open cache db: {}", db_path.display()))?;
 
@@ -61,6 +74,8 @@ impl Cache {
             conn,
             ttl_hours,
             max_entries,
+            model_id: model_id.to_string(),
+            pkg_mgr: pkg_mgr.unwrap_or("").to_string(),
         };
         cache.evict_expired()?;
         Ok(cache)
@@ -96,6 +111,8 @@ impl Cache {
             conn,
             ttl_hours,
             max_entries,
+            model_id: "test:model".to_string(),
+            pkg_mgr: String::new(),
         })
     }
 
@@ -105,7 +122,7 @@ impl Cache {
         os: &str,
         shell: &str,
     ) -> Result<Option<(String, String, String)>> {
-        let key = Self::make_key(query, os, shell);
+        let key = Self::make_key(query, os, shell, &self.model_id, &self.pkg_mgr);
         let now = now_secs();
         let ttl_secs = self.ttl_hours.saturating_mul(3600);
 
@@ -136,7 +153,7 @@ impl Cache {
         danger: &str,
         explanation: &str,
     ) -> Result<()> {
-        let key = Self::make_key(query, os, shell);
+        let key = Self::make_key(query, os, shell, &self.model_id, &self.pkg_mgr);
         self.conn.execute(
             "INSERT OR REPLACE INTO cache (key, command, danger, explanation, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![key, command, danger, explanation, now_secs()],
@@ -173,7 +190,7 @@ impl Cache {
     }
 
     pub fn delete(&self, query: &str, os: &str, shell: &str) -> Result<()> {
-        let key = Self::make_key(query, os, shell);
+        let key = Self::make_key(query, os, shell, &self.model_id, &self.pkg_mgr);
         self.conn
             .execute("DELETE FROM cache WHERE key = ?1", rusqlite::params![key])?;
         Ok(())
@@ -186,7 +203,7 @@ impl Cache {
         shell: &str,
         explanation: &str,
     ) -> Result<()> {
-        let key = Self::make_key(query, os, shell);
+        let key = Self::make_key(query, os, shell, &self.model_id, &self.pkg_mgr);
         self.conn.execute(
             "UPDATE cache SET explanation = ?1 WHERE key = ?2",
             rusqlite::params![explanation, key],
@@ -246,9 +263,15 @@ impl Cache {
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
-    pub(crate) fn make_key(query: &str, os: &str, shell: &str) -> String {
+    pub(crate) fn make_key(
+        query: &str,
+        os: &str,
+        shell: &str,
+        model: &str,
+        pkg_mgr: &str,
+    ) -> String {
         let normalized = query.trim().to_lowercase();
-        let input = format!("{}|{}|{}", normalized, os, shell);
+        let input = format!("{}|{}|{}|{}|{}", normalized, os, shell, model, pkg_mgr);
         let mut hasher = Sha256::new();
         hasher.update(input.as_bytes());
         format!("{:x}", hasher.finalize())
@@ -268,43 +291,57 @@ mod tests {
 
     #[test]
     fn make_key_deterministic() {
-        let k1 = Cache::make_key("list files", "Linux", "bash");
-        let k2 = Cache::make_key("list files", "Linux", "bash");
+        let k1 = Cache::make_key("list files", "Linux", "bash", "openai:gpt-4", "");
+        let k2 = Cache::make_key("list files", "Linux", "bash", "openai:gpt-4", "");
         assert_eq!(k1, k2);
     }
 
     #[test]
     fn make_key_normalized_case() {
-        let k1 = Cache::make_key("List Files", "Linux", "bash");
-        let k2 = Cache::make_key("list files", "Linux", "bash");
+        let k1 = Cache::make_key("List Files", "Linux", "bash", "m", "");
+        let k2 = Cache::make_key("list files", "Linux", "bash", "m", "");
         assert_eq!(k1, k2);
     }
 
     #[test]
     fn make_key_trimmed() {
-        let k1 = Cache::make_key("  list files  ", "Linux", "bash");
-        let k2 = Cache::make_key("list files", "Linux", "bash");
+        let k1 = Cache::make_key("  list files  ", "Linux", "bash", "m", "");
+        let k2 = Cache::make_key("list files", "Linux", "bash", "m", "");
         assert_eq!(k1, k2);
     }
 
     #[test]
     fn make_key_differs_by_os() {
-        let k1 = Cache::make_key("list files", "Linux", "bash");
-        let k2 = Cache::make_key("list files", "Windows", "bash");
+        let k1 = Cache::make_key("list files", "Linux", "bash", "m", "");
+        let k2 = Cache::make_key("list files", "Windows", "bash", "m", "");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn make_key_differs_by_shell() {
-        let k1 = Cache::make_key("list files", "Linux", "bash");
-        let k2 = Cache::make_key("list files", "Linux", "zsh");
+        let k1 = Cache::make_key("list files", "Linux", "bash", "m", "");
+        let k2 = Cache::make_key("list files", "Linux", "zsh", "m", "");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn make_key_differs_by_query() {
-        let k1 = Cache::make_key("list files", "Linux", "bash");
-        let k2 = Cache::make_key("show disk usage", "Linux", "bash");
+        let k1 = Cache::make_key("list files", "Linux", "bash", "m", "");
+        let k2 = Cache::make_key("show disk usage", "Linux", "bash", "m", "");
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn make_key_differs_by_model() {
+        let k1 = Cache::make_key("list files", "Linux", "bash", "openai:gpt-4", "");
+        let k2 = Cache::make_key("list files", "Linux", "bash", "openai:deepseek-v3", "");
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn make_key_differs_by_pkg_mgr() {
+        let k1 = Cache::make_key("build project", "Linux", "bash", "m", "cargo");
+        let k2 = Cache::make_key("build project", "Linux", "bash", "m", "npm");
         assert_ne!(k1, k2);
     }
 
@@ -430,9 +467,9 @@ mod tests {
         let cache = Cache::open_in_memory_with_max(168, 2).unwrap();
         let now = now_secs();
         // Insert with explicit timestamps to ensure ordering
-        let k1 = Cache::make_key("q1", "Linux", "bash");
-        let k2 = Cache::make_key("q2", "Linux", "bash");
-        let k3 = Cache::make_key("q3", "Linux", "bash");
+        let k1 = Cache::make_key("q1", "Linux", "bash", "test:model", "");
+        let k2 = Cache::make_key("q2", "Linux", "bash", "test:model", "");
+        let k3 = Cache::make_key("q3", "Linux", "bash", "test:model", "");
         cache
             .conn
             .execute(
@@ -619,11 +656,11 @@ mod tests {
 
     #[test]
     fn make_key_empty_query() {
-        let k1 = Cache::make_key("", "Linux", "bash");
-        let k2 = Cache::make_key("", "Linux", "bash");
+        let k1 = Cache::make_key("", "Linux", "bash", "m", "");
+        let k2 = Cache::make_key("", "Linux", "bash", "m", "");
         assert_eq!(k1, k2);
         // different from non-empty
-        let k3 = Cache::make_key("x", "Linux", "bash");
+        let k3 = Cache::make_key("x", "Linux", "bash", "m", "");
         assert_ne!(k1, k3);
     }
 }
