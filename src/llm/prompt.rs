@@ -460,7 +460,10 @@ mod tests {
             cwd: "/home/user".into(),
             arch: "x86_64".into(),
             is_git_repo: false,
+            repo_root: None,
+            project_root: None,
             package_manager: None,
+            package_manager_source: None,
         }
     }
 
@@ -471,7 +474,10 @@ mod tests {
             cwd: "C:\\Users\\test".into(),
             arch: "x86_64".into(),
             is_git_repo: false,
+            repo_root: None,
+            project_root: None,
             package_manager: None,
+            package_manager_source: None,
         }
     }
 

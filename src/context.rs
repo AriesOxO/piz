@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Serialize, Clone)]
 pub struct SystemContext {
@@ -7,10 +8,18 @@ pub struct SystemContext {
     pub cwd: String,
     pub arch: String,
     pub is_git_repo: bool,
+    pub repo_root: Option<String>,
+    pub project_root: Option<String>,
     pub package_manager: Option<String>,
+    pub package_manager_source: Option<String>,
 }
 
 pub fn collect_context() -> SystemContext {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    collect_context_from(&cwd)
+}
+
+fn collect_context_from(cwd: &Path) -> SystemContext {
     let os = if cfg!(target_os = "windows") {
         detect_windows_version()
     } else if cfg!(target_os = "macos") {
@@ -20,24 +29,63 @@ pub fn collect_context() -> SystemContext {
     };
 
     let shell = detect_shell();
-    let cwd = std::env::current_dir()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| ".".into());
     let arch = std::env::consts::ARCH.to_string();
-    let is_git_repo = std::path::Path::new(".git").exists();
-    let package_manager = detect_package_manager();
+    let workspace = detect_workspace(cwd);
 
     SystemContext {
         os,
         shell,
-        cwd,
+        cwd: cwd.display().to_string(),
         arch,
-        is_git_repo,
-        package_manager,
+        is_git_repo: workspace.repo_root.is_some(),
+        repo_root: workspace.repo_root.map(|p| p.display().to_string()),
+        project_root: workspace.project_root.map(|p| p.display().to_string()),
+        package_manager: workspace.package_manager,
+        package_manager_source: workspace.package_manager_source,
     }
 }
 
-fn detect_package_manager() -> Option<String> {
+#[derive(Debug, Clone, Default)]
+struct WorkspaceContext {
+    repo_root: Option<PathBuf>,
+    project_root: Option<PathBuf>,
+    package_manager: Option<String>,
+    package_manager_source: Option<String>,
+}
+
+fn detect_workspace(start: &Path) -> WorkspaceContext {
+    let mut current = Some(start);
+    let mut depth = 0usize;
+    let mut result = WorkspaceContext::default();
+
+    while let Some(dir) = current {
+        if result.repo_root.is_none() && dir.join(".git").exists() {
+            result.repo_root = Some(dir.to_path_buf());
+        }
+
+        if result.package_manager.is_none() {
+            if let Some((pm, source)) = detect_package_manager_in_dir(dir) {
+                result.project_root = Some(dir.to_path_buf());
+                result.package_manager = Some(pm);
+                result.package_manager_source = Some(source);
+            }
+        }
+
+        if result.repo_root.is_some() && result.package_manager.is_some() {
+            break;
+        }
+
+        depth += 1;
+        if depth >= 20 {
+            break;
+        }
+        current = dir.parent();
+    }
+
+    result
+}
+
+fn detect_package_manager_in_dir(dir: &Path) -> Option<(String, String)> {
     let checks: &[(&str, &str)] = &[
         ("Cargo.toml", "cargo"),
         ("package.json", "npm"),
@@ -50,8 +98,8 @@ fn detect_package_manager() -> Option<String> {
         ("pyproject.toml", "python"),
     ];
     for (file, pm) in checks {
-        if std::path::Path::new(file).exists() {
-            return Some(pm.to_string());
+        if dir.join(file).exists() {
+            return Some((pm.to_string(), (*file).to_string()));
         }
     }
     None
@@ -178,15 +226,15 @@ mod tests {
     #[test]
     fn context_git_detection() {
         let ctx = collect_context();
-        // We're in the piz repo, so .git should exist
         assert!(ctx.is_git_repo, "should detect git repo");
+        assert!(ctx.repo_root.is_some(), "should record repo root");
     }
 
     #[test]
     fn detect_package_manager_finds_cargo() {
-        // We're in the piz repo with Cargo.toml
-        let pm = detect_package_manager();
-        assert_eq!(pm, Some("cargo".to_string()));
+        let ctx = collect_context();
+        assert_eq!(ctx.package_manager, Some("cargo".to_string()));
+        assert_eq!(ctx.package_manager_source, Some("Cargo.toml".to_string()));
     }
 
     #[test]
@@ -199,5 +247,54 @@ mod tests {
             ctx.os,
             valid
         );
+    }
+
+    #[test]
+    fn detect_workspace_finds_git_and_package_manager_from_parent_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        let nested = repo.join("apps").join("cli").join("src");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        std::fs::write(repo.join("Cargo.toml"), "[package]\nname='demo'\nversion='0.1.0'\n").unwrap();
+
+        let ctx = collect_context_from(&nested);
+        assert!(ctx.is_git_repo);
+        assert_eq!(ctx.package_manager.as_deref(), Some("cargo"));
+        assert_eq!(ctx.package_manager_source.as_deref(), Some("Cargo.toml"));
+        assert_eq!(ctx.repo_root.as_deref(), Some(repo.to_string_lossy().as_ref()));
+        assert_eq!(ctx.project_root.as_deref(), Some(repo.to_string_lossy().as_ref()));
+    }
+
+    #[test]
+    fn detect_workspace_distinguishes_repo_root_and_project_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        let app = repo.join("apps").join("web");
+        let nested = app.join("src");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        std::fs::write(app.join("package.json"), "{}").unwrap();
+
+        let ctx = collect_context_from(&nested);
+        assert!(ctx.is_git_repo);
+        assert_eq!(ctx.repo_root.as_deref(), Some(repo.to_string_lossy().as_ref()));
+        assert_eq!(ctx.project_root.as_deref(), Some(app.to_string_lossy().as_ref()));
+        assert_eq!(ctx.package_manager.as_deref(), Some("npm"));
+        assert_eq!(ctx.package_manager_source.as_deref(), Some("package.json"));
+    }
+
+    #[test]
+    fn detect_workspace_returns_none_without_markers() {
+        let dir = tempfile::tempdir().unwrap();
+        let nested = dir.path().join("plain").join("folder");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let ctx = collect_context_from(&nested);
+        assert!(!ctx.is_git_repo);
+        assert!(ctx.repo_root.is_none());
+        assert!(ctx.project_root.is_none());
+        assert!(ctx.package_manager.is_none());
+        assert!(ctx.package_manager_source.is_none());
     }
 }

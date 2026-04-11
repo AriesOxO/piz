@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use colored::*;
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 const GITHUB_API_LATEST: &str = "https://api.github.com/repos/AriesOxO/piz/releases/latest";
 const CHECK_INTERVAL_SECS: u64 = 86400; // 24 hours
@@ -12,7 +14,7 @@ struct GitHubRelease {
     assets: Vec<ReleaseAsset>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct ReleaseAsset {
     name: String,
     browser_download_url: String,
@@ -184,16 +186,12 @@ pub async fn run_update(tr: &crate::i18n::T) -> Result<()> {
         remote_ver.green().bold()
     );
 
-    // Find the right asset for this platform
-    let asset_url = find_platform_asset(&release.assets)?;
-    let asset_name = release
-        .assets
-        .iter()
-        .find(|a| a.browser_download_url == asset_url)
-        .map(|a| a.name.as_str())
-        .unwrap_or("piz");
+    // Find the right asset for this platform and its checksum metadata
+    let asset = find_platform_asset(&release.assets)?;
+    let checksum_asset = find_checksum_asset(&release.assets)?;
 
-    println!("  {} {}", "Download:".bold(), asset_name.dimmed());
+    println!("  {} {}", "Download:".bold(), asset.name.dimmed());
+    println!("  {} {}", "Checksum:".bold(), checksum_asset.name.dimmed());
 
     let current_exe =
         std::env::current_exe().context("Cannot determine current executable path")?;
@@ -236,8 +234,8 @@ pub async fn run_update(tr: &crate::i18n::T) -> Result<()> {
         .interact()?;
 
     match selection {
-        0 => do_overwrite_install(&asset_url, &current_exe, is_zh).await?,
-        1 => do_uninstall_reinstall(&asset_url, &current_exe, is_zh).await?,
+        0 => do_overwrite_install(&asset, &checksum_asset, &current_exe, is_zh).await?,
+        1 => do_uninstall_reinstall(&asset, &checksum_asset, &current_exe, is_zh).await?,
         _ => {
             println!("{}", if is_zh { "已取消。" } else { "Cancelled." });
             return Ok(());
@@ -282,7 +280,7 @@ async fn fetch_latest_release() -> Result<GitHubRelease> {
     Ok(release)
 }
 
-fn find_platform_asset(assets: &[ReleaseAsset]) -> Result<String> {
+fn find_platform_asset(assets: &[ReleaseAsset]) -> Result<ReleaseAsset> {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
 
@@ -304,7 +302,7 @@ fn find_platform_asset(assets: &[ReleaseAsset]) -> Result<String> {
             && name.contains(arch_pattern)
             && name.ends_with(ext)
         {
-            return Ok(asset.browser_download_url.clone());
+            return Ok(asset.clone());
         }
     }
 
@@ -312,7 +310,7 @@ fn find_platform_asset(assets: &[ReleaseAsset]) -> Result<String> {
     for asset in assets {
         let name = asset.name.to_lowercase();
         if os_patterns.iter().any(|p| name.contains(p)) && name.ends_with(ext) {
-            return Ok(asset.browser_download_url.clone());
+            return Ok(asset.clone());
         }
     }
 
@@ -326,6 +324,24 @@ fn find_platform_asset(assets: &[ReleaseAsset]) -> Result<String> {
             .collect::<Vec<_>>()
             .join(", ")
     );
+}
+
+fn find_checksum_asset(assets: &[ReleaseAsset]) -> Result<ReleaseAsset> {
+    for asset in assets {
+        let name = asset.name.to_ascii_lowercase();
+        if name == "checksums.txt"
+            || name == "sha256sums.txt"
+            || name == "sha256sum.txt"
+            || name.contains("sha256")
+            || name.contains("checksum")
+        {
+            return Ok(asset.clone());
+        }
+    }
+
+    anyhow::bail!(
+        "No checksum asset found in release. Refusing to update without integrity verification."
+    )
 }
 
 /// Build a reqwest client that respects https_proxy/HTTPS_PROXY/ALL_PROXY env vars.
@@ -439,6 +455,103 @@ async fn download_to_temp(url: &str, is_zh: bool) -> Result<std::path::PathBuf> 
     Ok(tmp_file)
 }
 
+async fn download_text(url: &str) -> Result<String> {
+    let client = build_proxy_client(60)?;
+    let download_urls = get_download_urls(url);
+    let mut last_err = None;
+
+    for download_url in &download_urls {
+        match client
+            .get(download_url)
+            .header("User-Agent", format!("piz/{}", current_version()))
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                return resp.text().await.context("Failed to read checksum response");
+            }
+            Ok(resp) => last_err = Some(anyhow::anyhow!("HTTP {}", resp.status())),
+            Err(e) => last_err = Some(e.into()),
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Checksum download failed")))
+}
+
+fn parse_checksums(text: &str) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        let mut parts = trimmed.split_whitespace();
+        let hash = match parts.next() {
+            Some(v) if v.len() == 64 && v.chars().all(|c| c.is_ascii_hexdigit()) => {
+                v.to_ascii_lowercase()
+            }
+            _ => continue,
+        };
+        let file = match parts.next() {
+            Some(v) => v.trim_start_matches('*').to_string(),
+            None => continue,
+        };
+
+        map.insert(file, hash);
+    }
+
+    map
+}
+
+fn compute_sha256(path: &std::path::Path) -> Result<String> {
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("Failed to read downloaded file: {}", path.display()))?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+async fn download_verified_asset(
+    asset: &ReleaseAsset,
+    checksum_asset: &ReleaseAsset,
+    is_zh: bool,
+) -> Result<std::path::PathBuf> {
+    let archive = download_to_temp(&asset.browser_download_url, is_zh).await?;
+    let checksum_text = download_text(&checksum_asset.browser_download_url).await?;
+    let checksums = parse_checksums(&checksum_text);
+    let expected = checksums.get(&asset.name).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Checksum file does not contain an entry for asset '{}'",
+            asset.name
+        )
+    })?;
+    let actual = compute_sha256(&archive)?;
+
+    if &actual != expected {
+        cleanup_temp(&archive);
+        anyhow::bail!(
+            "Checksum mismatch for '{}'. Expected {}, got {}",
+            asset.name,
+            expected,
+            actual
+        );
+    }
+
+    println!(
+        "  {} {}",
+        if is_zh {
+            "校验通过:"
+        } else {
+            "Checksum verified:"
+        },
+        asset.name.dimmed()
+    );
+
+    Ok(archive)
+}
+
 fn extract_binary(archive_path: &std::path::Path) -> Result<std::path::PathBuf> {
     let tmp_dir = archive_path.parent().unwrap().join("extracted");
     let _ = std::fs::remove_dir_all(&tmp_dir);
@@ -508,8 +621,13 @@ fn find_file_recursive(dir: &std::path::Path, name: &str) -> Option<std::path::P
     None
 }
 
-async fn do_overwrite_install(url: &str, current_exe: &std::path::Path, is_zh: bool) -> Result<()> {
-    let archive = download_to_temp(url, is_zh).await?;
+async fn do_overwrite_install(
+    asset: &ReleaseAsset,
+    checksum_asset: &ReleaseAsset,
+    current_exe: &std::path::Path,
+    is_zh: bool,
+) -> Result<()> {
+    let archive = download_verified_asset(asset, checksum_asset, is_zh).await?;
     let new_binary = extract_binary(&archive)?;
 
     println!(
@@ -527,11 +645,12 @@ async fn do_overwrite_install(url: &str, current_exe: &std::path::Path, is_zh: b
 }
 
 async fn do_uninstall_reinstall(
-    url: &str,
+    asset: &ReleaseAsset,
+    checksum_asset: &ReleaseAsset,
     current_exe: &std::path::Path,
     is_zh: bool,
 ) -> Result<()> {
-    let archive = download_to_temp(url, is_zh).await?;
+    let archive = download_verified_asset(asset, checksum_asset, is_zh).await?;
     let new_binary = extract_binary(&archive)?;
 
     println!(
@@ -653,5 +772,58 @@ mod tests {
     #[test]
     fn current_version_not_empty() {
         assert!(!current_version().is_empty());
+    }
+
+    #[test]
+    fn find_checksum_asset_picks_checksums_file() {
+        let assets = vec![
+            ReleaseAsset {
+                name: "piz-windows-x86_64.zip".into(),
+                browser_download_url: "https://example.com/piz.zip".into(),
+            },
+            ReleaseAsset {
+                name: "checksums.txt".into(),
+                browser_download_url: "https://example.com/checksums.txt".into(),
+            },
+        ];
+        let checksum = find_checksum_asset(&assets).unwrap();
+        assert_eq!(checksum.name, "checksums.txt");
+    }
+
+    #[test]
+    fn parse_checksums_supports_common_formats() {
+        let text = "\
+7f83b1657ff1fc53b92dc18148a1d65dfa135014aafa6b87f15d7b0f00a08d8d  piz-linux-x86_64.tar.gz\n\
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa *piz-windows-x86_64.zip\n";
+        let parsed = parse_checksums(text);
+        assert_eq!(
+            parsed.get("piz-linux-x86_64.tar.gz").map(String::as_str),
+            Some("7f83b1657ff1fc53b92dc18148a1d65dfa135014aafa6b87f15d7b0f00a08d8d")
+        );
+        assert_eq!(
+            parsed.get("piz-windows-x86_64.zip").map(String::as_str),
+            Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+    }
+
+    #[test]
+    fn compute_sha256_matches_known_value() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sample.bin");
+        std::fs::write(&path, b"abc").unwrap();
+        let hash = compute_sha256(&path).unwrap();
+        assert_eq!(
+            hash,
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn parse_checksums_ignores_invalid_lines() {
+        let parsed = parse_checksums(
+            "not-a-hash file.tar.gz\n# comment\n123 short.txt\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb valid.txt",
+        );
+        assert_eq!(parsed.len(), 1);
+        assert!(parsed.contains_key("valid.txt"));
     }
 }

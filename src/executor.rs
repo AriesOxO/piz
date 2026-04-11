@@ -49,8 +49,8 @@ pub fn prompt_user(
         }
     }
 
-    // Auto-confirm safe commands if configured
-    if auto_confirm && danger == DangerLevel::Safe {
+    // Auto-confirm only for a conservative local read-only whitelist.
+    if should_auto_confirm(command, danger, auto_confirm) {
         return Ok(UserChoice::Execute);
     }
 
@@ -110,21 +110,9 @@ pub fn execute_command_with_shell(
     tr: &i18n::T,
 ) -> Result<(i32, String, String)> {
     let shell_cmd = if cfg!(target_os = "windows") {
-        match shell {
-            "PowerShell" => run_powershell(command),
-            "cmd" => run_cmd(command),
-            "bash" | "zsh" | "fish" => run_unix_like(command),
-            _ => {
-                // Fallback: auto-detect (for callers that don't have context)
-                if is_powershell_parent() {
-                    run_powershell(command)
-                } else {
-                    run_cmd(command)
-                }
-            }
-        }
+        run_windows_command(command, shell)
     } else {
-        Command::new("sh").args(["-c", command]).output()
+        run_unix_command(command, shell)
     };
 
     let output = shell_cmd?;
@@ -151,6 +139,56 @@ pub fn execute_command_with_shell(
     }
 
     Ok((exit_code, stdout, stderr))
+}
+
+fn should_auto_confirm(command: &str, danger: DangerLevel, auto_confirm: bool) -> bool {
+    auto_confirm && danger == DangerLevel::Safe && is_auto_confirm_whitelisted(command)
+}
+
+fn is_auto_confirm_whitelisted(command: &str) -> bool {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    if contains_risky_shell_constructs(trimmed) {
+        return false;
+    }
+
+    let lower = trimmed.to_ascii_lowercase();
+    let first = lower.split_whitespace().next().unwrap_or("");
+
+    match first {
+        "ls" | "dir" | "pwd" | "whoami" | "df" | "du" | "ps" | "cat" | "type" => true,
+        "git" => matches_git_read_only(trimmed),
+        "docker" => matches_docker_read_only(trimmed),
+        "echo" => matches_echo_read_only(trimmed),
+        _ => false,
+    }
+}
+
+fn contains_risky_shell_constructs(command: &str) -> bool {
+    ['|', '>', '<', ';', '&'].iter().any(|ch| command.contains(*ch))
+}
+
+fn matches_git_read_only(command: &str) -> bool {
+    let lower = command.to_ascii_lowercase();
+    matches!(
+        lower.split_whitespace().nth(1),
+        Some("status" | "log" | "diff" | "show" | "branch")
+    )
+}
+
+fn matches_docker_read_only(command: &str) -> bool {
+    let lower = command.to_ascii_lowercase();
+    matches!(
+        lower.split_whitespace().nth(1),
+        Some("ps" | "images" | "inspect" | "logs")
+    )
+}
+
+fn matches_echo_read_only(command: &str) -> bool {
+    !command.contains('$') && !command.contains('%')
 }
 
 fn save_last_exec(command: &str, exit_code: i32, stdout: &str, stderr: &str) -> Result<()> {
@@ -195,6 +233,115 @@ fn run_cmd(command: &str) -> std::io::Result<std::process::Output> {
 /// Run command through sh (for Git Bash / MSYS2 on Windows).
 fn run_unix_like(command: &str) -> std::io::Result<std::process::Output> {
     Command::new("sh").args(["-c", command]).output()
+}
+
+fn run_bash(command: &str) -> std::io::Result<std::process::Output> {
+    Command::new("bash").args(["-c", command]).output()
+}
+
+fn run_zsh(command: &str) -> std::io::Result<std::process::Output> {
+    Command::new("zsh").args(["-c", command]).output()
+}
+
+fn run_fish(command: &str) -> std::io::Result<std::process::Output> {
+    Command::new("fish").args(["-c", command]).output()
+}
+
+fn run_unix_command(command: &str, shell: &str) -> std::io::Result<std::process::Output> {
+    match resolve_unix_shell(shell).as_str() {
+        "bash" => run_bash(command),
+        "zsh" => run_zsh(command),
+        "fish" => run_fish(command),
+        _ => run_unix_like(command),
+    }
+}
+
+fn run_windows_command(command: &str, shell: &str) -> std::io::Result<std::process::Output> {
+    match resolve_windows_shell(shell).as_str() {
+        "PowerShell" => run_powershell(command),
+        "cmd" => run_cmd(command),
+        "bash" => run_bash(command),
+        "zsh" => run_zsh(command),
+        "fish" => run_fish(command),
+        _ => run_cmd(command),
+    }
+}
+
+fn resolve_unix_shell(shell: &str) -> String {
+    let normalized = normalize_shell_name(shell);
+    if normalized.is_empty() {
+        return first_available_shell(&["bash", "zsh", "fish", "sh"]);
+    }
+
+    match normalized.as_str() {
+        "bash" if is_unix_shell_available("bash") => "bash".to_string(),
+        "zsh" if is_unix_shell_available("zsh") => "zsh".to_string(),
+        "fish" if is_unix_shell_available("fish") => "fish".to_string(),
+        "sh" => "sh".to_string(),
+        _ => first_available_shell(&["bash", "zsh", "fish", "sh"]),
+    }
+}
+
+fn resolve_windows_shell(shell: &str) -> String {
+    let normalized = normalize_shell_name(shell);
+    match normalized.as_str() {
+        "powershell" if is_windows_shell_available("powershell") => "PowerShell".to_string(),
+        "cmd" if is_windows_shell_available("cmd") => "cmd".to_string(),
+        "bash" if is_unix_shell_available("bash") => "bash".to_string(),
+        "zsh" if is_unix_shell_available("zsh") => "zsh".to_string(),
+        "fish" if is_unix_shell_available("fish") => "fish".to_string(),
+        _ => {
+            if is_powershell_parent() && is_windows_shell_available("powershell") {
+                "PowerShell".to_string()
+            } else {
+                "cmd".to_string()
+            }
+        }
+    }
+}
+
+fn first_available_shell(candidates: &[&str]) -> String {
+    for candidate in candidates {
+        if *candidate == "sh" || is_unix_shell_available(candidate) {
+            return (*candidate).to_string();
+        }
+    }
+    "sh".to_string()
+}
+
+fn normalize_shell_name(shell: &str) -> String {
+    match shell.trim().to_ascii_lowercase().as_str() {
+        "powershell" | "pwsh" => "powershell".to_string(),
+        "cmd" => "cmd".to_string(),
+        "bash" => "bash".to_string(),
+        "zsh" => "zsh".to_string(),
+        "fish" => "fish".to_string(),
+        "sh" => "sh".to_string(),
+        _ => String::new(),
+    }
+}
+
+fn is_unix_shell_available(shell: &str) -> bool {
+    match Command::new(shell).arg("--version").output() {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
+
+fn is_windows_shell_available(shell: &str) -> bool {
+    match shell {
+        "powershell" => Command::new("powershell")
+            .args(["-NoProfile", "-Command", "$PSVersionTable.PSVersion.Major"])
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false),
+        "cmd" => Command::new("cmd")
+            .args(["/C", "ver"])
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false),
+        _ => false,
+    }
 }
 
 /// Check if the parent process is PowerShell (fallback detection).
@@ -388,6 +535,58 @@ mod tests {
         assert!(matches!(result, UserChoice::Execute));
     }
 
+    #[test]
+    fn should_auto_confirm_whitelisted_read_only_commands() {
+        assert!(should_auto_confirm("ls -la", DangerLevel::Safe, true));
+        assert!(should_auto_confirm("pwd", DangerLevel::Safe, true));
+        assert!(should_auto_confirm("git status", DangerLevel::Safe, true));
+        assert!(should_auto_confirm("docker ps", DangerLevel::Safe, true));
+    }
+
+    #[test]
+    fn should_not_auto_confirm_non_whitelisted_safe_commands() {
+        assert!(!should_auto_confirm(
+            "git checkout -b feature/test",
+            DangerLevel::Safe,
+            true
+        ));
+        assert!(!should_auto_confirm(
+            "curl https://example.com",
+            DangerLevel::Safe,
+            true
+        ));
+        assert!(!should_auto_confirm(
+            "docker exec -it app sh",
+            DangerLevel::Safe,
+            true
+        ));
+    }
+
+    #[test]
+    fn should_not_auto_confirm_risky_shell_constructs() {
+        assert!(!should_auto_confirm(
+            "echo hi > out.txt",
+            DangerLevel::Safe,
+            true
+        ));
+        assert!(!should_auto_confirm(
+            "git status | cat",
+            DangerLevel::Safe,
+            true
+        ));
+        assert!(!should_auto_confirm(
+            "echo $HOME",
+            DangerLevel::Safe,
+            true
+        ));
+    }
+
+    #[test]
+    fn should_not_auto_confirm_when_disabled_or_non_safe() {
+        assert!(!should_auto_confirm("ls -la", DangerLevel::Safe, false));
+        assert!(!should_auto_confirm("ls -la", DangerLevel::Warning, true));
+    }
+
     // ── execute_command ──
 
     #[test]
@@ -420,5 +619,50 @@ mod tests {
         };
         let (_, _, stderr) = execute_command(cmd, tr).unwrap();
         assert!(stderr.contains("error"));
+    }
+
+    #[test]
+    fn normalize_shell_name_variants() {
+        assert_eq!(normalize_shell_name("PowerShell"), "powershell");
+        assert_eq!(normalize_shell_name("pwsh"), "powershell");
+        assert_eq!(normalize_shell_name("bash"), "bash");
+        assert_eq!(normalize_shell_name("unknown"), "");
+    }
+
+    #[test]
+    fn resolve_unix_shell_prefers_requested_shell_when_available() {
+        if is_unix_shell_available("bash") {
+            assert_eq!(resolve_unix_shell("bash"), "bash");
+        }
+    }
+
+    #[test]
+    fn resolve_unix_shell_falls_back_to_available_shell() {
+        let resolved = resolve_unix_shell("missing-shell-name");
+        assert!(matches!(resolved.as_str(), "bash" | "zsh" | "fish" | "sh"));
+    }
+
+    #[test]
+    fn resolve_windows_shell_normalizes_powershell() {
+        if cfg!(target_os = "windows") {
+            let resolved = resolve_windows_shell("pwsh");
+            assert!(matches!(resolved.as_str(), "PowerShell" | "cmd"));
+        }
+    }
+
+    #[test]
+    fn execute_with_requested_shell_runs_successfully() {
+        let tr = crate::i18n::t(crate::i18n::Lang::En);
+        if cfg!(target_os = "windows") {
+            let (code, stdout, _) =
+                execute_command_with_shell("echo executor_shell_test", "cmd", tr).unwrap();
+            assert_eq!(code, 0);
+            assert!(stdout.contains("executor_shell_test"));
+        } else {
+            let (code, stdout, _) =
+                execute_command_with_shell("echo executor_shell_test", "bash", tr).unwrap();
+            assert_eq!(code, 0);
+            assert!(stdout.contains("executor_shell_test"));
+        }
     }
 }
