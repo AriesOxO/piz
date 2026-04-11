@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [0.3.4] - 2026-04-11
+
+### Improved / 优化
+
+- **Shell-aware execution**: Commands now execute with the detected target shell on Unix-like systems (`bash`/`zsh`/`fish`) instead of always falling back to `sh`
+- **Shell 语义对齐**：类 Unix 系统下按目标 Shell（`bash`/`zsh`/`fish`）执行命令，不再一律回退到 `sh`
+- **Workspace context discovery**: Git repository and package manager detection now walks parent directories, preserving correct context in nested folders and monorepos
+- **上下文探测升级**：Git 仓库和包管理器检测改为向上递归查找，在子目录和 monorepo 中保持正确上下文
+- **Safer auto-confirm**: `auto_confirm_safe` now applies only to a conservative local read-only whitelist instead of any command merely labeled `safe`
+- **自动执行收紧**：`auto_confirm_safe` 仅对白名单内的本地只读命令生效，不再对所有被标记为 `safe` 的命令直接放行
+- **Verified self-update**: `piz update` now requires a release checksum asset and verifies SHA-256 before extraction and binary replacement
+- **更新链路校验**：`piz update` 现在要求 release 提供 checksum 文件，并在解压替换前完成 SHA-256 校验
+
+### Fixed / 修复
+
+- Prevented shell syntax drift where prompts generated shell-specific syntax but the runtime executed under a different shell
+- 修复了 Prompt 生成特定 Shell 语法但运行时使用另一种 Shell 执行导致的偏差
+- Prevented unverified release assets from being installed during self-update
+- 修复了自更新过程中未校验 release 资产即可安装的问题
+
 ## [0.3.3] - 2026-04-10
 
 ### Added / 新增
