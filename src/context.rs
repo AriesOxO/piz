@@ -256,14 +256,24 @@ mod tests {
         let nested = repo.join("apps").join("cli").join("src");
         std::fs::create_dir_all(&nested).unwrap();
         std::fs::create_dir_all(repo.join(".git")).unwrap();
-        std::fs::write(repo.join("Cargo.toml"), "[package]\nname='demo'\nversion='0.1.0'\n").unwrap();
+        std::fs::write(
+            repo.join("Cargo.toml"),
+            "[package]\nname='demo'\nversion='0.1.0'\n",
+        )
+        .unwrap();
 
         let ctx = collect_context_from(&nested);
         assert!(ctx.is_git_repo);
         assert_eq!(ctx.package_manager.as_deref(), Some("cargo"));
         assert_eq!(ctx.package_manager_source.as_deref(), Some("Cargo.toml"));
-        assert_eq!(ctx.repo_root.as_deref(), Some(repo.to_string_lossy().as_ref()));
-        assert_eq!(ctx.project_root.as_deref(), Some(repo.to_string_lossy().as_ref()));
+        assert_eq!(
+            ctx.repo_root.as_deref(),
+            Some(repo.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            ctx.project_root.as_deref(),
+            Some(repo.to_string_lossy().as_ref())
+        );
     }
 
     #[test]
@@ -278,8 +288,14 @@ mod tests {
 
         let ctx = collect_context_from(&nested);
         assert!(ctx.is_git_repo);
-        assert_eq!(ctx.repo_root.as_deref(), Some(repo.to_string_lossy().as_ref()));
-        assert_eq!(ctx.project_root.as_deref(), Some(app.to_string_lossy().as_ref()));
+        assert_eq!(
+            ctx.repo_root.as_deref(),
+            Some(repo.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            ctx.project_root.as_deref(),
+            Some(app.to_string_lossy().as_ref())
+        );
         assert_eq!(ctx.package_manager.as_deref(), Some("npm"));
         assert_eq!(ctx.package_manager_source.as_deref(), Some("package.json"));
     }

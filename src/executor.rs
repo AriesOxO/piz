@@ -168,7 +168,9 @@ fn is_auto_confirm_whitelisted(command: &str) -> bool {
 }
 
 fn contains_risky_shell_constructs(command: &str) -> bool {
-    ['|', '>', '<', ';', '&'].iter().any(|ch| command.contains(*ch))
+    ['|', '>', '<', ';', '&']
+        .iter()
+        .any(|ch| command.contains(*ch))
 }
 
 fn matches_git_read_only(command: &str) -> bool {
@@ -574,11 +576,7 @@ mod tests {
             DangerLevel::Safe,
             true
         ));
-        assert!(!should_auto_confirm(
-            "echo $HOME",
-            DangerLevel::Safe,
-            true
-        ));
+        assert!(!should_auto_confirm("echo $HOME", DangerLevel::Safe, true));
     }
 
     #[test]

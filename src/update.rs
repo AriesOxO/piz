@@ -468,7 +468,10 @@ async fn download_text(url: &str) -> Result<String> {
             .await
         {
             Ok(resp) if resp.status().is_success() => {
-                return resp.text().await.context("Failed to read checksum response");
+                return resp
+                    .text()
+                    .await
+                    .context("Failed to read checksum response");
             }
             Ok(resp) => last_err = Some(anyhow::anyhow!("HTTP {}", resp.status())),
             Err(e) => last_err = Some(e.into()),
