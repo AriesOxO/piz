@@ -114,11 +114,41 @@ jobs:
       - name: List artifacts for upload
         run: ls -lh piz-* 2>/dev/null || echo "No artifacts found"
 
+      - name: Generate release notes from CHANGELOG
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          git fetch --force --tags
+          PREV_TAG=$(git tag --sort=-version:refname | grep -Fvx "v${VERSION}" | head -n 1 || true)
+          python - <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          version = os.environ["GITHUB_REF"].removeprefix("refs/tags/v")
+          content = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          pattern = rf"(?s)## \[{re.escape(version)}\] - .*?(?=\n## \[|\Z)"
+          match = re.search(pattern, content)
+          if not match:
+              print(f"Failed to find changelog section for {version}", file=sys.stderr)
+              sys.exit(1)
+
+          body = f"# v{version}\n\n{match.group(0).strip()}\n"
+          Path("release-notes.md").write_text(body, encoding="utf-8")
+          PY
+
+          if [ -n "${PREV_TAG}" ]; then
+            echo "" >> release-notes.md
+            echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...v${VERSION}" >> release-notes.md
+          fi
+          cat release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
           fail_on_unmatched_files: true
+          body_path: release-notes.md
           files: |
             piz-*.tar.gz
             piz-*.zip
