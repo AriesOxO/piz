@@ -1,10 +1,10 @@
-# Demo: piz basic usage
-Output assets/demo-basic.gif
+# Demo: piz fix mode
+Output assets/demo-fix.gif
 
 Set Shell "bash"
 Set FontSize 16
-Set Width 960
-Set Height 520
+Set Width 980
+Set Height 560
 Set Padding 20
 Set TypingSpeed 45ms
 Set Theme "Catppuccin Mocha"
@@ -18,13 +18,9 @@ Enter
 Sleep 300ms
 Show
 
-Type "printf 'list all rust files in src\n' | piz --pipe"
+Type "piz fix"
 Enter
-Sleep 2s
-
-Type "piz 'list project files'"
-Enter
-Sleep 2s
+Sleep 3s
 Type "n"
 Enter
 Sleep 1s

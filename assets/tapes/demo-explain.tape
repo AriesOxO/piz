@@ -2,16 +2,22 @@
 Output assets/demo-explain.gif
 
 Set Shell "bash"
-Set FontSize 18
-Set Width 900
-Set Height 600
+Set FontSize 16
+Set Width 980
+Set Height 620
 Set Padding 20
-Set TypingSpeed 60ms
+Set TypingSpeed 45ms
 Set Theme "Catppuccin Mocha"
 
-# Explain a command
-Type "piz -e 'tar -czf archive.tar.gz src/'"
+Hide
+Type "source ./assets/tapes/demo-session-init.sh"
 Enter
-Sleep 10s
+Sleep 300ms
+Type "clear"
+Enter
+Sleep 300ms
+Show
 
-Sleep 3s
+Type "piz -e 'find src -type f -name '\''*.rs'\'''"
+Enter
+Sleep 4s
